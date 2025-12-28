@@ -1,0 +1,2781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片管理工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            padding: 0;
+            color: #111;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0;
+            background: transparent;
+            border-radius: 0;
+            box-shadow: none;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        header {
+            background: white;
+            color: #333;
+            padding: 10px 20px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            z-index: 100;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        h1 {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #e60023; /* Pinterest Red-ish */
+            margin-right: 20px;
+        }
+        
+        h1 i {
+            font-size: 1.2em;
+        }
+
+        .path-display {
+            background: #f0f2f5;
+            padding: 8px 15px;
+            border-radius: 24px;
+            color: #333;
+            margin: 0;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .path-display:hover {
+            background: #e9ecef;
+            border-color: #ddd;
+        }
+
+        .change-folder-btn {
+            background: #333;
+            color: white;
+            border-radius: 20px;
+            padding: 5px 12px;
+        }
+
+        .change-folder-btn:hover {
+            background: #000;
+        }
+        
+        .stats {
+            background: transparent;
+            padding: 0;
+            gap: 20px;
+            backdrop-filter: none;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .stat-value {
+            font-size: 1em;
+            font-weight: 700;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .controls {
+            background: white;
+            padding: 10px 20px;
+            border-bottom: 1px solid #eaeaea;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-right: 15px;
+            border-right: 1px solid #eee;
+        }
+        
+        .toolbar-group:last-child {
+            border-right: none;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .filter-pill {
+            padding: 8px 16px;
+            border-radius: 24px;
+            background: #f0f2f5;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .filter-pill:hover {
+            background: #e9ecef;
+        }
+        
+        .filter-pill.active {
+            background: #111;
+            color: white;
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+        }
+        
+        .toggle-switch input {
+            display: none;
+        }
+        
+        .toggle-slider {
+            width: 36px;
+            height: 20px;
+            background-color: #ccc;
+            border-radius: 20px;
+            position: relative;
+            transition: .4s;
+        }
+        
+        .toggle-slider:before {
+            content: "";
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            border-radius: 50%;
+            transition: .4s;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #2196F3;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(16px);
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden; /* Container handles scroll */
+            background: #fff;
+        }
+        
+        .sidebar {
+            display: none; /* Hide sidebar */
+        }
+        
+        .image-scroll-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 10px;
+        }
+
+        .image-grid {
+            padding: 10px 0;
+            width: 100%;
+            margin: 0 auto;
+        }
+        
+        .image-item {
+            width: 236px; /* Pinterest standard column width approx */
+            padding: 8px;
+        }
+        
+        /* Responsive columns for Masonry */
+        @media (max-width: 1600px) { .image-item { width: 20%; } }
+        @media (max-width: 1200px) { .image-item { width: 25%; } }
+        @media (max-width: 900px) { .image-item { width: 33.333%; } }
+        @media (max-width: 600px) { .image-item { width: 50%; } }
+
+        .image-card {
+            position: relative;
+            border-radius: 16px; /* More rounded like Pinterest */
+            box-shadow: none;
+            transition: transform 0.2s;
+            overflow: hidden;
+        }
+        
+        .image-card:hover {
+            transform: none; /* Pinterest doesn't lift, it darkens */
+            filter: brightness(0.95);
+        }
+        
+        .image-thumbnail {
+            border-radius: 16px;
+            width: 100%;
+            display: block;
+        }
+        
+        .image-info {
+            padding: 8px 5px;
+        }
+        
+        .image-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #111;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .image-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .image-actions {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            z-index: 5;
+        }
+        
+        .image-card:hover .image-actions {
+            opacity: 1;
+        }
+        
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            transition: all 0.2s;
+            backdrop-filter: blur(4px);
+        }
+        
+        .action-btn:hover {
+            transform: scale(1.1);
+            background: white;
+        }
+        
+        .mark-btn {
+            color: #28a745;
+        }
+        
+        .delete-btn {
+            color: #dc3545;
+        }
+        
+        .preview-btn {
+            color: #007bff;
+        }
+        
+        .mark-icon {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #28a745;
+            background: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        
+        .viewer-custom-ui {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 12px 25px;
+            border-radius: 50px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            display: flex;
+            gap: 20px;
+            z-index: 2020;
+            transition: all 0.3s ease;
+        }
+
+        .viewer-custom-ui .action-icon-btn {
+            background: transparent;
+            border: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            color: #333;
+            padding: 5px 10px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .viewer-custom-ui .action-icon-btn:hover {
+            background: rgba(0,0,0,0.05);
+            transform: translateY(-2px);
+        }
+
+        .viewer-custom-ui .action-icon-btn i {
+            font-size: 20px;
+        }
+
+        .viewer-custom-ui .action-icon-btn span {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .viewer-custom-ui .action-icon-btn.active {
+            color: #e60023;
+        }
+
+        .viewer-custom-ui .action-icon-btn.delete:hover {
+            color: #dc3545;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #6c757d;
+        }
+        
+        .no-images {
+            text-align: center;
+            padding: 50px;
+            color: #6c757d;
+            grid-column: 1 / -1;
+        }
+        
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9); /* Darker background */
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: transparent;
+            box-shadow: none;
+            max-width: 95vw;
+            max-height: 95vh;
+            overflow: visible;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        .modal-image-container {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-image {
+            max-width: 100%;
+            max-height: 90vh;
+            display: block;
+            object-fit: contain;
+        }
+        
+        .modal-top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        
+        .modal-image-container:hover .modal-top-bar,
+        .modal-image-container:hover .modal-bottom-bar {
+            opacity: 1;
+        }
+
+        .modal-file-info {
+            pointer-events: auto;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+        
+        .modal-file-info h3 {
+            margin-bottom: 5px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .modal-close-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+            transition: background 0.2s;
+            pointer-events: auto;
+        }
+
+        .modal-close-btn:hover {
+            background: rgba(255,255,255,0.4);
+        }
+
+        .modal-bottom-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(10px);
+            padding: 10px 25px;
+            border-radius: 40px;
+            display: flex;
+            gap: 30px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: auto;
+        }
+
+        .action-icon-btn {
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.9);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            font-size: 18px;
+            transition: transform 0.2s, color 0.2s;
+            min-width: 40px;
+        }
+
+        .action-icon-btn span {
+            font-size: 10px;
+            font-weight: 500;
+        }
+
+        .action-icon-btn:hover {
+            transform: scale(1.1);
+            color: white;
+        }
+
+        .action-icon-btn.active {
+            color: #ffd700;
+        }
+        
+        .action-icon-btn.delete:hover {
+            color: #ff4757;
+        }
+        
+        /* 文件夹浏览器样式 */
+        .folder-list {
+            list-style: none;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .folder-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f8f9fa;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.2s;
+            border-radius: 4px;
+            margin: 2px 5px;
+        }
+
+        .folder-item:hover {
+            background: #f0f2f5;
+            transform: translateX(2px);
+        }
+
+        .folder-item:last-child {
+            border-bottom: none;
+        }
+
+        .folder-item i {
+            color: #ffd700;
+            font-size: 1.2em;
+        }
+        
+        .folder-item span {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .folder-breadcrumb {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .breadcrumb-item {
+            cursor: pointer;
+            color: #007bff;
+            padding: 2px 5px;
+            border-radius: 4px;
+        }
+
+        .breadcrumb-item:hover {
+            background: #e9ecef;
+            text-decoration: underline;
+        }
+
+        .breadcrumb-separator {
+            color: #6c757d;
+        }
+
+        
+        /* 通知样式 */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            z-index: 1001;
+            transform: translateX(150%);
+            transition: transform 0.3s ease;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        .notification.success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+        
+        .notification.error {
+            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+        }
+        
+        .notification.info {
+            background: linear-gradient(135deg, #007bff 0%, #6610f2 100%);
+        }
+        
+        .notification.warning {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+            color: #212529;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 1600px) {
+            .image-item { width: 25%; }
+        }
+
+        @media (max-width: 1200px) {
+            .image-item { width: 33.333%; }
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                flex-direction: column;
+                height: auto;
+            }
+            
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid #eaeaea;
+            }
+            
+            .image-item { width: 33.333%; }
+        }
+        
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .stats {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .controls {
+                justify-content: center;
+            }
+            
+            .image-item { width: 50%; }
+        }
+
+        @media (max-width: 480px) {
+            .image-item { width: 100%; }
+        }
+        
+        /* 动画 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease forwards;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background-color: #ff4757;
+            color: white;
+            border-radius: 10px;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/viewer.min.css') }}">
+    <script src="{{ url_for('static', filename='vendor/imagesloaded.pkgd.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/masonry.pkgd.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/viewer.min.js') }}"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div style="display: flex; align-items: center;">
+                    <h1><i class="fas fa-camera-retro"></i></h1>
+                    <div class="path-display">
+                        <span class="path-text" id="current-path-text">.</span>
+                    </div>
+                    <button class="change-folder-btn" onclick="openFolderBrowser()" style="margin-left: 10px;">
+                        <i class="fas fa-folder"></i>
+                    </button>
+                </div>
+
+                <div class="stats">
+                    <div class="stat-item">
+                        <span class="stat-value" id="total-count">0</span>
+                        <span class="stat-label">张图片</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="marked-count">0</span>
+                        <span class="stat-label">已标记</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <div class="controls">
+            <div class="toolbar-group" id="filter-group">
+                <div class="filter-pill active" onclick="setFilter('all')">全部</div>
+                <div class="filter-pill" onclick="setFilter('jpg')">JPG</div>
+                <div class="filter-pill" onclick="setFilter('marked')"><i class="fas fa-star"></i> 已标记</div>
+                
+                <!-- RAW Toggle -->
+                <label class="toggle-switch" style="margin-left: 10px;">
+                    <input type="checkbox" id="show-raw-toggle" onchange="toggleRawVisibility()">
+                    <span class="toggle-slider"></span>
+                    <span>显示RAW</span>
+                </label>
+                <!-- Hidden RAW filter pill, shown only when toggle is on -->
+                <div class="filter-pill" id="raw-filter-pill" onclick="setFilter('raw')" style="display: none;">RAW</div>
+            </div>
+            
+            <div class="toolbar-group" id="sort-group">
+                <div class="filter-pill active" onclick="setSort('date')">日期</div>
+                <div class="filter-pill" onclick="setSort('name')">名称</div>
+                <div class="filter-pill" onclick="setSort('size')">大小</div>
+            </div>
+
+            <div class="toolbar-group" style="margin-left: auto;">
+                <button class="btn btn-primary" onclick="organizeImages()">整理</button>
+                <button class="btn btn-secondary" onclick="revertOrganization()">复原</button>
+                <button class="btn btn-warning" onclick="showTrash()" style="position: relative;">
+                    <i class="fas fa-trash"></i>
+                    <span id="trash-badge" class="badge" style="display: none;">0</span>
+                </button>
+                <button class="btn btn-danger" onclick="clearCache()"><i class="fas fa-broom"></i></button>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="image-scroll-container">
+                <div class="image-grid" id="image-grid">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p style="margin-top: 15px;">正在加载图片...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 审美提升模式：独立容器 -->
+    <div id="aesthetic-container" style="display:none; height:100vh; display:flex; flex-direction:column;">
+        <header style="background:#fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05); padding:10px 20px; display:flex; align-items:center; gap:12px;">
+            <h2 style="font-size: 16px; color:#e60023; margin-right:10px; display:flex; align-items:center; gap:8px;">
+                <i class="fas fa-shuffle"></i> 审美提升模式
+            </h2>
+            <div id="aesthetic-path-display" class="path-display" style="margin:0;">未选择目录</div>
+            <button class="change-folder-btn" onclick="openAestheticFolderBrowser()" style="margin-left: 10px;">
+                <i class="fas fa-folder-open"></i>
+            </button>
+            <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+                <span id="aesthetic-filter-info" style="font-size:12px; color:#e60023; font-weight:600; display:none;"></span>
+                <button class="btn" id="aesthetic-clear-filter" style="background:#f0f2f5; color:#333; display:none;" onclick="clearAestheticFilter()">
+                    <i class="fas fa-times"></i> 清空筛选
+                </button>
+                <span id="aesthetic-count" style="font-size:12px; color:#666;"></span>
+            </div>
+        </header>
+        <div class="image-scroll-container" id="aesthetic-scroll-container" style="flex:1;">
+            <div class="image-grid" id="aesthetic-grid">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 15px;">等待选择目录...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图片预览模态框 (Legacy, kept for structure but hidden) -->
+    <div class="modal" id="preview-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-image-container">
+                <img class="modal-image" id="preview-image" src="" alt="预览">
+                
+                <!-- Top Info Overlay -->
+                <div class="modal-top-bar">
+                    <div class="modal-file-info">
+                        <h3 id="preview-name"></h3>
+                        <div id="preview-details" style="font-size: 12px; opacity: 0.8;"></div>
+                    </div>
+                    <button class="modal-close-btn" onclick="closePreview()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- Bottom Action Bar -->
+                <div class="modal-bottom-bar">
+                    <button class="action-icon-btn" id="modal-mark-btn" onclick="toggleMark(currentPreview)">
+                        <i class="far fa-star"></i>
+                        <span>标记</span>
+                    </button>
+                    <button class="action-icon-btn" onclick="downloadImage(currentPreview)">
+                        <i class="fas fa-download"></i>
+                        <span>下载</span>
+                    </button>
+                    <button class="action-icon-btn delete" onclick="confirmDelete(currentPreview)">
+                        <i class="fas fa-trash"></i>
+                        <span>删除</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 比较视图模态框 -->
+    <div class="modal" id="compare-modal" style="display: none; z-index: 3000;">
+        <div class="modal-content" style="width: 95vw; height: 95vh; background: #111; display: flex; flex-direction: column;">
+            <div class="modal-top-bar" style="position: relative; opacity: 1; background: transparent; padding: 10px 20px;">
+                <div class="modal-file-info">
+                    <h3 id="compare-title" style="color: white;">JPG vs RAW 对比</h3>
+                </div>
+                <button class="modal-close-btn" onclick="closeCompare()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div style="flex: 1; display: flex; gap: 2px; overflow: hidden; position: relative;">
+                <div style="flex: 1; position: relative; background: black; display: flex; justify-content: center; align-items: center;">
+                    <div style="position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 4px;">JPG</div>
+                    <img id="compare-jpg" src="" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                </div>
+                <div style="flex: 1; position: relative; background: black; display: flex; justify-content: center; align-items: center;">
+                    <div style="position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 4px;">RAW</div>
+                    <img id="compare-raw" src="" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 文件夹浏览器模态框 -->
+    <div class="modal" id="folder-modal">
+        <div class="modal-content" style="width: 600px; max-width: 90%;">
+            <div class="modal-info" style="border-top: none; width: 100%; padding: 20px; background: white; border-radius: 12px;">
+                <h3 style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                    <span>选择文件夹</span>
+                    <button onclick="closeFolderBrowser()" style="background:none; border:none; cursor:pointer; font-size: 1.2em;"><i class="fas fa-times"></i></button>
+                </h3>
+                
+                <div class="folder-breadcrumb" id="folder-breadcrumb">
+                    <!-- 面包屑导航 -->
+                </div>
+                
+                <div style="margin: 10px 0; color: #666; font-size: 0.9em; display: none;">
+                    当前路径: <span id="browser-current-path" style="font-family: monospace; font-weight: bold;"></span>
+                </div>
+                
+                <ul class="folder-list" id="folder-list">
+                    <!-- 文件夹列表 -->
+                </ul>
+                
+                <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                    <button class="btn" style="background: #f0f2f5; color: #333;" onclick="closeFolderBrowser()">取消</button>
+                    <button class="btn" style="background: #e60023; color: white;" onclick="selectCurrentFolder()">
+                        <i class="fas fa-check"></i> 选择此文件夹
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 回收站模态框 -->
+    <div class="modal" id="trash-modal">
+        <div class="modal-content" style="width: 600px; max-width: 90%;">
+            <div class="modal-info" style="border-top: none; width: 100%; padding: 20px; background: white; border-radius: 12px;">
+                <h3 style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                    <span>回收站</span>
+                    <button onclick="closeTrashModal()" style="background:none; border:none; cursor:pointer; font-size: 1.2em;"><i class="fas fa-times"></i></button>
+                </h3>
+                
+                <div id="trash-list" class="folder-list" style="max-height: 500px;">
+                    <!-- Trash items will be injected here -->
+                </div>
+                
+                <div style="text-align: right; margin-top: 10px; color: #666; font-size: 0.9em;">
+                    <i class="fas fa-info-circle"></i> 仅显示最近删除的记录
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知 -->
+    <div class="notification" id="notification"></div>
+
+    <!-- 审美提升模式浮动按钮 -->
+    <button id="aesthetic-fab" title="审美提升模式"
+            style="position: fixed; right: 24px; bottom: 24px; z-index: 3000; width: 56px; height: 56px; border-radius: 50%; border: none; background:#e60023; color:#fff; box-shadow: 0 6px 16px rgba(230,0,35,0.4); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:20px;">
+        <i class="fas fa-shuffle"></i>
+    </button>
+
+    <!-- 审美模式返回按钮 -->
+    <button id="aesthetic-exit" title="退出审美模式"
+            style="position: fixed; left: 24px; bottom: 24px; z-index: 3000; height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid #ddd; background:#fff; color:#333; box-shadow: 0 4px 12px rgba(0,0,0,0.08); cursor:pointer; display:none; align-items:center; gap:8px;">
+        <i class="fas fa-arrow-left"></i><span>退出审美模式</span>
+    </button>
+
+    <script>
+        // 全局变量
+        let allImages = [];
+        let processedImages = []; // Filtered and sorted images
+        let renderedCount = 0;
+        const BATCH_SIZE = 20;
+        const AESTHETIC_BATCH_SIZE = 30;
+        let msnry = null;
+        let currentFilter = 'all';
+        let currentSort = 'date';
+        let currentPreview = null;
+        let markedImages = new Set();
+        let currentPath = '.';
+        let browserPath = '.';
+        
+        let showRaw = false;
+        
+        // 审美模式独立状态
+        let folderSelectMode = 'normal'; // 'normal' | 'aesthetic'
+        let aestheticMode = false;
+        let aestheticAllItems = [];  // 缓存完整数据，用于前端筛选
+        let aestheticItems = [];     // 当前显示的数据（可能经过筛选）
+        let aestheticAuthor = null;
+        let aestheticWork = null;
+        let aestheticPath = null;
+        let aestheticRenderedCount = 0;
+        let isRestoringScrollPosition = false;  // 标志：正在恢复滚动位置
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 从 localStorage 加载上次选择的目录
+            const savedPath = localStorage.getItem('last_folder');
+            if (savedPath) {
+                currentPath = savedPath;
+            }
+            
+            // 加载 RAW 显示设置
+            const savedShowRaw = localStorage.getItem('show_raw');
+            if (savedShowRaw === 'true') {
+                showRaw = true;
+                document.getElementById('show-raw-toggle').checked = true;
+                document.getElementById('raw-filter-pill').style.display = 'flex';
+            }
+
+            // 审美模式记忆：若上次处于审美模式且有审美目录，直接恢复
+            const savedAestheticPath = localStorage.getItem('aesthetic_folder');
+            const savedAestheticActive = localStorage.getItem('aesthetic_active') === 'true';
+            if (savedAestheticActive && savedAestheticPath) {
+                aestheticPath = savedAestheticPath;
+                document.getElementById('aesthetic-path-display').textContent = aestheticPath;
+                enterAestheticMode();
+            } else {
+                loadImages();
+                loadMarkedImages();
+                loadTrashInfo();
+            }
+            
+            // 添加键盘快捷键
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closePreview();
+                    closeCompare();
+                }
+                if (e.key === 'Delete' && currentPreview) {
+                    confirmDelete(currentPreview);
+                }
+            });
+
+
+            // Grid Infinite Scroll
+            const scrollContainer = document.querySelector('.image-scroll-container');
+            scrollContainer.addEventListener('scroll', debounce(function() {
+                if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 500) {
+                    loadMoreImages(10); // Load more when scrolling near bottom
+                }
+            }, 100));
+
+            const aestheticScrollContainer = document.getElementById('aesthetic-scroll-container');
+            if (aestheticScrollContainer) {
+                aestheticScrollContainer.addEventListener('scroll', debounce(function() {
+                    if (!aestheticMode) return;
+                    // 保存滚动位置
+                    saveAestheticScrollPosition();
+                    // 懒加载更多图片
+                    if (aestheticScrollContainer.scrollTop + aestheticScrollContainer.clientHeight >= aestheticScrollContainer.scrollHeight - 500) {
+                        loadMoreAesthetic(Math.max(10, Math.floor(AESTHETIC_BATCH_SIZE / 2)));
+                    }
+                }, 100));
+            }
+            
+            // 使用事件委托处理审美模式的筛选点击（这样懒加载的元素也能响应）
+            const aestheticGrid = document.getElementById('aesthetic-grid');
+            if (aestheticGrid) {
+                aestheticGrid.addEventListener('click', function(e) {
+                    // 使用 closest 向上查找 .author 或 .work 元素
+                    const authorEl = e.target.closest('.author');
+                    const workEl = e.target.closest('.work');
+                    
+                    // 处理作者点击（确保在 .aesthetic-meta 内）
+                    if (authorEl && authorEl.closest('.aesthetic-meta')) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        console.log('点击了作者:', authorEl.dataset.author); // 调试输出
+                        aestheticAuthor = authorEl.dataset.author;
+                        aestheticWork = null;
+                        applyAestheticFilter();
+                        showNotification(`筛选作者: ${aestheticAuthor}`, 'info');
+                        return;
+                    }
+                    
+                    // 处理作品点击（确保在 .aesthetic-meta 内）
+                    if (workEl && workEl.closest('.aesthetic-meta')) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        console.log('点击了作品:', workEl.dataset.work); // 调试输出
+                        aestheticAuthor = workEl.dataset.author || '';
+                        aestheticWork = workEl.dataset.work;
+                        applyAestheticFilter();
+                        showNotification(`筛选作品: ${aestheticWork}`, 'info');
+                        return;
+                    }
+                });
+            }
+            
+            // Pinterest 风格：监听浏览器前进/后退按钮
+            window.addEventListener('popstate', function(event) {
+                if (!aestheticMode) return;
+                
+                // 从 URL 恢复筛选状态
+                if (restoreAestheticFilterFromURL()) {
+                    // 如果状态改变了，应用筛选（不重新加载数据）
+                    applyAestheticFilter();
+                }
+            });
+        });
+        
+        // 加载图片
+        async function loadImages() {
+            try {
+                const response = await fetch(`/api/images?folder=${encodeURIComponent(currentPath)}&show_raw=${showRaw}`);
+                allImages = await response.json();
+                updateStats();
+                renderImages();
+                
+                // 更新路径显示
+                document.getElementById('current-path-text').textContent = currentPath === '.' ? '当前目录' : currentPath;
+            } catch (error) {
+                showNotification('加载图片失败', 'error');
+            }
+        }
+        
+        // 加载已标记的图片
+        async function loadMarkedImages() {
+            try {
+                const response = await fetch(`/api/marked?folder=${encodeURIComponent(currentPath)}`);
+                const marked = await response.json();
+                markedImages = new Set(marked);
+                updateStats();
+            } catch (error) {
+                console.error('加载标记图片失败:', error);
+            }
+        }
+        
+        // 加载回收站信息
+        async function loadTrashInfo() {
+            try {
+                const response = await fetch(`/api/trash?folder=${encodeURIComponent(currentPath)}`);
+                const trash = await response.json();
+                const badge = document.getElementById('trash-badge');
+                if (trash.count > 0) {
+                    badge.textContent = trash.count;
+                    badge.style.display = 'block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('加载回收站信息失败:', error);
+            }
+        }
+        
+        // 更新统计信息
+        function updateStats() {
+            document.getElementById('total-count').textContent = allImages.length;
+            document.getElementById('marked-count').textContent = markedImages.size;
+        }
+        
+        // 渲染图片 (Initial Render)
+        function renderImages() {
+            const grid = document.getElementById('image-grid');
+            
+            // 如果之前有 Masonry 实例，先销毁
+            if (msnry) {
+                msnry.destroy();
+                msnry = null;
+            }
+
+            if (allImages.length === 0) {
+                grid.innerHTML = `
+                    <div class="no-images">
+                        <i class="fas fa-image" style="font-size: 48px; margin-bottom: 20px; opacity: 0.3;"></i>
+                        <p>没有找到图片</p>
+                        <p style="font-size: 14px; margin-top: 10px;">请将图片放在当前目录下</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 过滤和排序
+            processedImages = filterImages(allImages);
+            processedImages = sortImages(processedImages);
+            
+            // Reset rendered count
+            renderedCount = Math.min(BATCH_SIZE, processedImages.length);
+            
+            // 生成HTML for initial batch
+            const initialBatch = processedImages.slice(0, renderedCount);
+            grid.innerHTML = initialBatch.map(img => createImageHTML(img)).join('');
+
+            // 初始化 Masonry
+            msnry = new Masonry(grid, {
+                itemSelector: '.image-item',
+                percentPosition: true
+            });
+
+            // 初始化 Viewer.js
+            if (window.galleryViewer) {
+                window.galleryViewer.destroy();
+            }
+            window.galleryViewer = new Viewer(grid, {
+                url: 'data-original',
+                toolbar: {
+                    zoomIn: 1,
+                    zoomOut: 1,
+                    oneToOne: 1,
+                    reset: 1,
+                    prev: 1,
+                    play: 1,
+                    next: 1,
+                    rotateLeft: 1,
+                    rotateRight: 1,
+                    flipHorizontal: 1,
+                    flipVertical: 1,
+                },
+                title: function (image) {
+                    return image.alt + ' (' + (this.index + 1) + '/' + this.length + ')';
+                },
+                viewed() {
+                    updateViewerCustomUI(this.image);
+                    
+                    // Lazy Load Logic for Viewer
+                    // If we are viewing one of the last few images, load more
+                    // Note: this.index is 0-based index in the viewer's list (which matches rendered list)
+                    if (this.index >= renderedCount - 2) {
+                        loadMoreImages(1); // Load 1 more image as requested
+                    }
+                },
+            });
+
+            // 图片加载完成后重新布局
+            imagesLoaded(grid).on('progress', function() {
+                msnry.layout();
+            });
+        }
+
+        // Helper to create HTML string for an image
+        function createImageHTML(img) {
+            return `
+                <div class="image-item">
+                    <div class="image-card fade-in ${markedImages.has(img.name) ? 'marked' : ''}">
+                        ${markedImages.has(img.name) ? 
+                            '<div class="mark-icon"><i class="fas fa-star"></i></div>' : ''}
+                        <img class="image-thumbnail" 
+                             src="/api/thumbnail/${encodeURIComponent(img.path)}?v=${img.mtime}&t=${Date.now()}" 
+                             data-original="/api/preview/${encodeURIComponent(img.path)}?v=${img.mtime}&t=${Date.now()}"
+                             alt="${img.name}"
+                             loading="lazy"
+                             onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDMwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNFNUU1RTUiLz48cGF0aCBkPSJNMTI1IDEwMEgxNzVWMTUwSDEyNVYxMDBaIiBmaWxsPSIjQ0VDRUNFIi8+PHJlY3QgeD0iMTAwIiB5PSIxNjUiIHdpZHRoPSIxMDAiIGhlaWdodD0iMTUiIGZpbGw9IiNDRUNFQ0UiLz48L3N2Zz4='">
+                        <div class="image-info">
+                            <div class="image-name">${img.name}</div>
+                            <div class="image-meta">
+                                <span>${img.type}</span>
+                                <span>${formatFileSize(img.size)}</span>
+                            </div>
+                        </div>
+                        <div class="image-actions">
+                            <button class="action-btn preview-btn" onclick="event.stopPropagation(); previewImage('${img.path.replace(/'/g, "\\'")}')">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                            <button class="action-btn mark-btn" onclick="event.stopPropagation(); toggleMark('${img.name}')">
+                                <i class="fas ${markedImages.has(img.name) ? 'fa-star' : 'fa-star-o'}"></i>
+                            </button>
+                            <button class="action-btn delete-btn" onclick="event.stopPropagation(); confirmDelete('${img.name}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Load more images (Lazy Loading)
+        function loadMoreImages(count) {
+            if (renderedCount >= processedImages.length) return;
+
+            const nextBatch = processedImages.slice(renderedCount, renderedCount + count);
+            if (nextBatch.length === 0) return;
+
+            const grid = document.getElementById('image-grid');
+            
+            // Create temporary container to parse HTML
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = nextBatch.map(img => createImageHTML(img)).join('');
+            
+            const newElements = Array.from(tempDiv.children);
+            
+            // Append to grid
+            newElements.forEach(el => grid.appendChild(el));
+            
+            // Update Masonry
+            msnry.appended(newElements);
+            
+            // Update Viewer
+            if (window.galleryViewer) {
+                window.galleryViewer.update();
+            }
+            
+            // Wait for images to load then layout
+            imagesLoaded(newElements).on('progress', function() {
+                msnry.layout();
+            });
+
+            renderedCount += nextBatch.length;
+        }
+        
+        // 过滤图片
+        function filterImages(images) {
+            let result = [];
+            switch(currentFilter) {
+                case 'jpg':
+                    result = images.filter(img => img.type === 'JPG');
+                    break;
+                case 'raw':
+                    // 显示所有 RAW 文件，即使有对应的 JPG
+                    result = images.filter(img => img.type === 'RAW');
+                    break;
+                case 'marked':
+                    result = images.filter(img => markedImages.has(img.name));
+                    break;
+                default: // 'all'
+                    // 在全部视图中，如果同名文件既有 JPG 又有 RAW，只显示 JPG
+                    const groups = {};
+                    images.forEach(img => {
+                        // 获取文件名主干 (不含扩展名)
+                        const lastDotIndex = img.name.lastIndexOf('.');
+                        const stem = lastDotIndex !== -1 ? img.name.substring(0, lastDotIndex).toLowerCase() : img.name.toLowerCase();
+                        
+                        if (!groups[stem]) {
+                            groups[stem] = [];
+                        }
+                        groups[stem].push(img);
+                    });
+                    
+                    // 从每组中选择一个代表
+                    Object.values(groups).forEach(group => {
+                        if (group.length === 1) {
+                            result.push(group[0]);
+                        } else {
+                            // 检查是否有非 RAW 文件
+                            const nonRaws = group.filter(img => img.type !== 'RAW');
+                            if (nonRaws.length > 0) {
+                                // 优先显示 JPG/PNG
+                                // 如果有多个非 RAW，优先显示 .jpg/.jpeg
+                                nonRaws.sort((a, b) => {
+                                    const isJpgA = a.name.toLowerCase().endsWith('.jpg') || a.name.toLowerCase().endsWith('.jpeg');
+                                    const isJpgB = b.name.toLowerCase().endsWith('.jpg') || b.name.toLowerCase().endsWith('.jpeg');
+                                    if (isJpgA && !isJpgB) return -1;
+                                    if (!isJpgA && isJpgB) return 1;
+                                    return 0;
+                                });
+                                result.push(nonRaws[0]);
+                            } else {
+                                // 只有 RAW 文件
+                                result.push(group[0]);
+                            }
+                        }
+                    });
+            }
+            return result;
+        }
+        
+        // 排序图片
+        function sortImages(images) {
+            switch(currentSort) {
+                case 'name':
+                    return [...images].sort((a, b) => a.name.localeCompare(b.name));
+                case 'size':
+                    return [...images].sort((a, b) => b.size - a.size);
+                default: // date
+                    return [...images].sort((a, b) => b.mtime - a.mtime);
+            }
+        }
+        
+        // 设置过滤器
+        function setFilter(filter) {
+            currentFilter = filter;
+            
+            // 更新活动状态
+            document.querySelectorAll('#filter-group .filter-pill').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            event.target.closest('.filter-pill').classList.add('active');
+            
+            renderImages();
+        }
+        
+        // 设置排序
+        function setSort(sort) {
+            currentSort = sort;
+            
+            // 更新活动状态
+            document.querySelectorAll('#sort-group .filter-pill').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            event.target.closest('.filter-pill').classList.add('active');
+            
+            renderImages();
+        }
+        
+        // 预览图片 (Legacy function, now handled by Viewer.js but kept for button clicks)
+        async function previewImage(path) {
+            // Find the image in the grid and trigger click
+            const img = document.querySelector(`img[data-original*="${encodeURIComponent(path)}"]`);
+            if (img) {
+                img.click();
+            }
+        }
+
+        // 切换 RAW 显示
+        function toggleRawVisibility() {
+            showRaw = document.getElementById('show-raw-toggle').checked;
+            localStorage.setItem('show_raw', showRaw);
+            
+            const rawPill = document.getElementById('raw-filter-pill');
+            if (showRaw) {
+                rawPill.style.display = 'flex';
+            } else {
+                rawPill.style.display = 'none';
+                if (currentFilter === 'raw') {
+                    setFilter('all');
+                }
+            }
+            // 重新加载图片以获取 RAW 文件
+            loadImages();
+        }
+
+        // 打开对比视图
+        function openCompare(jpgPath, rawPath, name) {
+            if (window.galleryViewer) {
+                window.galleryViewer.hide();
+            }
+            
+            const modal = document.getElementById('compare-modal');
+            const jpgImg = document.getElementById('compare-jpg');
+            const rawImg = document.getElementById('compare-raw');
+            const title = document.getElementById('compare-title');
+            
+            title.textContent = name;
+            
+            // 使用预览图接口
+            jpgImg.src = `/api/preview/${encodeURIComponent(jpgPath)}`;
+            rawImg.src = `/api/preview/${encodeURIComponent(rawPath)}`;
+            
+            modal.style.display = 'flex';
+            modal.classList.add('active');
+        }
+
+        function closeCompare() {
+            const modal = document.getElementById('compare-modal');
+            modal.style.display = 'none';
+            modal.classList.remove('active');
+        }
+
+        // Update Custom UI in Viewer
+        function updateViewerCustomUI(image) {
+            // Remove existing custom UI if any
+            const existingUI = document.querySelector('.viewer-custom-ui');
+            if (existingUI) existingUI.remove();
+
+            // Create new UI
+            const ui = document.createElement('div');
+            ui.className = 'viewer-custom-ui modal-bottom-bar';
+            ui.style.zIndex = '2020'; // Higher than Viewer
+            ui.style.opacity = '1';
+            ui.style.display = 'flex';
+            ui.style.position = 'fixed'; // Ensure it's fixed relative to viewport
+            
+            // Extract filename from alt or src
+            const filename = image.alt;
+            const isMarked = markedImages.has(filename);
+            
+            // Find image data to check for RAW
+            const imgData = processedImages.find(img => img.name === filename);
+            const hasRaw = imgData && imgData.has_raw;
+
+            let html = `
+                <button class="action-icon-btn ${isMarked ? 'active' : ''}" id="viewer-mark-btn">
+                    <i class="${isMarked ? 'fas' : 'far'} fa-star"></i>
+                    <span>${isMarked ? '已标记' : '标记'}</span>
+                </button>
+            `;
+            
+            if (hasRaw) {
+                html += `
+                <button class="action-icon-btn" id="viewer-compare-btn">
+                    <i class="fas fa-columns"></i>
+                    <span>对比RAW</span>
+                </button>
+                `;
+            }
+            
+            html += `
+                <button class="action-icon-btn" id="viewer-download-btn">
+                    <i class="fas fa-download"></i>
+                    <span>下载</span>
+                </button>
+                <button class="action-icon-btn delete" id="viewer-delete-btn">
+                    <i class="fas fa-trash"></i>
+                    <span>删除</span>
+                </button>
+            `;
+
+            ui.innerHTML = html;
+
+            // Append to body (Viewer appends itself to body)
+            document.querySelector('.viewer-container').appendChild(ui);
+
+            // Add event listeners
+            document.getElementById('viewer-mark-btn').onclick = (e) => {
+                e.stopPropagation();
+                toggleMark(filename);
+                // Update button state immediately for better UX
+                const btn = e.currentTarget;
+                const icon = btn.querySelector('i');
+                const span = btn.querySelector('span');
+                const nowMarked = !markedImages.has(filename); 
+            };
+            
+            if (hasRaw) {
+                document.getElementById('viewer-compare-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    openCompare(imgData.path, imgData.raw_path, imgData.name);
+                };
+            }
+
+            document.getElementById('viewer-download-btn').onclick = (e) => {
+                e.stopPropagation();
+                const originalImg = document.querySelector(`img[alt="${filename}"]`);
+                if (originalImg) {
+                    const url = originalImg.getAttribute('data-original');
+                    const path = decodeURIComponent(url.split('?')[0].replace('/api/preview/', ''));
+                    downloadImage(path);
+                }
+            };
+
+            document.getElementById('viewer-delete-btn').onclick = (e) => {
+                e.stopPropagation();
+                confirmDelete(filename);
+            };
+        }
+        
+        // 下载图片
+        function downloadImage(path) {
+            const link = document.createElement('a');
+            link.href = `/api/original/${encodeURIComponent(path)}`;
+            link.download = path.split('/').pop();
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // 关闭预览
+        function closePreview() {
+            if (window.galleryViewer) {
+                window.galleryViewer.hide();
+            }
+            const modal = document.getElementById('preview-modal');
+            if (modal) {
+                modal.classList.remove('active');
+                modal.style.display = 'none';
+            }
+            document.body.style.overflow = 'auto';
+            currentPreview = null;
+        }
+        
+        // 标记/取消标记图片
+        async function toggleMark(filename) {
+            try {
+                const isMarked = markedImages.has(filename);
+                const action = isMarked ? '取消标记' : '标记';
+                
+                const response = await fetch('/api/mark', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        filename: filename,
+                        folder: currentPath,
+                        mark: !isMarked
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 更新标记状态
+                    if (isMarked) {
+                        markedImages.delete(filename);
+                    } else {
+                        markedImages.add(filename);
+                    }
+                    
+                    // Update Viewer UI if open
+                    const viewerUI = document.querySelector('.viewer-custom-ui');
+                    if (viewerUI) {
+                        const markBtn = document.getElementById('viewer-mark-btn');
+                        if (markBtn) {
+                            if (markedImages.has(filename)) {
+                                markBtn.classList.add('active');
+                                markBtn.querySelector('span').textContent = '已标记';
+                                markBtn.querySelector('i').className = 'fas fa-star';
+                            } else {
+                                markBtn.classList.remove('active');
+                                markBtn.querySelector('span').textContent = '标记';
+                                markBtn.querySelector('i').className = 'far fa-star';
+                            }
+                        }
+                    }
+
+                    // Update Grid UI (without full re-render if possible to avoid closing viewer)
+                    // Find the card
+                    const card = Array.from(document.querySelectorAll('.image-name')).find(el => el.textContent === filename)?.closest('.image-card');
+                    if (card) {
+                        if (markedImages.has(filename)) {
+                            card.classList.add('marked');
+                            if (!card.querySelector('.mark-icon')) {
+                                const icon = document.createElement('div');
+                                icon.className = 'mark-icon';
+                                icon.innerHTML = '<i class="fas fa-star"></i>';
+                                card.insertBefore(icon, card.firstChild);
+                            }
+                        } else {
+                            card.classList.remove('marked');
+                            const icon = card.querySelector('.mark-icon');
+                            if (icon) icon.remove();
+                        }
+                    }
+                    
+                    updateStats();
+                    // renderImages(); // Don't re-render entire grid to keep viewer open
+                    
+                    showNotification(`${action}成功 (${result.count}个文件)`, 'success');
+                }
+            } catch (error) {
+                showNotification('标记操作失败', 'error');
+            }
+        }
+        
+        // 确认删除
+        function confirmDelete(filename) {
+            // 直接删除，不询问，默认移动到回收站
+            deleteImage(filename, false);
+        }
+        
+        // 删除图片
+        async function deleteImage(filename, permanent = false) {
+            try {
+                const response = await fetch('/api/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        filename: filename,
+                        folder: currentPath,
+                        permanent: permanent
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification(`${permanent ? '永久删除' : '删除'}成功 (${result.count}个文件)`, 'success');
+                    
+                    // 重新加载图片和回收站信息
+                    loadImages();
+                    loadTrashInfo();
+                    closePreview();
+                }
+            } catch (error) {
+                showNotification('删除操作失败', 'error');
+            }
+        }
+        
+        // 整理图片
+        async function organizeImages() {
+            if (!confirm('将按格式分类当前目录下的图片，是否继续？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/organize', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ folder: currentPath })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification(result.message, 'success');
+                    loadImages();
+                }
+            } catch (error) {
+                showNotification('整理失败', 'error');
+            }
+        }
+        
+        // 复原整理
+        async function revertOrganization() {
+            if (!confirm('将还原最近的整理操作，是否继续？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/revert', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ folder: currentPath })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification(result.message, 'success');
+                    loadImages();
+                }
+            } catch (error) {
+                showNotification('复原失败', 'error');
+            }
+        }
+        
+
+        // 显示回收站
+        async function showTrash() {
+            try {
+                const response = await fetch(`/api/trash?folder=${encodeURIComponent(currentPath)}`);
+                const trash = await response.json();
+                
+                const list = document.getElementById('trash-list');
+                list.innerHTML = '';
+                
+                if (trash.count === 0) {
+                    list.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">回收站为空</div>';
+                } else {
+                    trash.items.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'folder-item';
+                        div.style.justifyContent = 'space-between';
+                        
+                        const date = new Date(item.time).toLocaleString();
+                        
+                        // Info section
+                        const infoDiv = document.createElement('div');
+                        infoDiv.style.display = 'flex';
+                        infoDiv.style.alignItems = 'center';
+                        infoDiv.style.gap = '10px';
+                        infoDiv.innerHTML = `
+                            <i class="fas fa-image" style="color: #666;"></i>
+                            <div>
+                                <div style="font-weight: 600;">${item.original_name}</div>
+                                <div style="font-size: 0.8em; color: #999;">${date} · ${item.file_count} 个文件</div>
+                            </div>
+                        `;
+                        
+                        // Restore button
+                        const btn = document.createElement('button');
+                        btn.className = 'btn btn-sm btn-primary';
+                        btn.style.padding = '4px 10px';
+                        btn.style.fontSize = '12px';
+                        btn.textContent = '恢复';
+                        btn.onclick = function(e) {
+                            e.stopPropagation();
+                            console.log('Restore button clicked for:', item.original_name);
+                            restoreTrashItem(item.original_name);
+                        };
+                        
+                        div.appendChild(infoDiv);
+                        div.appendChild(btn);
+                        list.appendChild(div);
+                    });
+                }
+                
+                document.getElementById('trash-modal').classList.add('active');
+            } catch (error) {
+                console.error(error);
+                showNotification('查看回收站失败', 'error');
+            }
+        }
+
+        function closeTrashModal() {
+            document.getElementById('trash-modal').classList.remove('active');
+        }
+
+        async function restoreTrashItem(filename) {
+            showNotification(`正在恢复 ${filename}...`, 'info');
+            await restoreImage(filename);
+            // Refresh trash list
+            showTrash();
+        }
+        
+        // 恢复图片
+        async function restoreImage(filename) {
+            try {
+                const response = await fetch('/api/restore', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        filename: filename,
+                        folder: currentPath
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification('恢复成功', 'success');
+                    loadImages();
+                    loadTrashInfo();
+                } else {
+                    showNotification(result.message, 'error');
+                }
+            } catch (error) {
+                showNotification('恢复失败', 'error');
+            }
+        }
+        
+        // 清除缓存
+        async function clearCache() {
+            try {
+                const response = await fetch('/api/clear-cache', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification('缓存已清除', 'success');
+                    // 重新加载图片以刷新缩略图
+                    renderImages();
+                }
+            } catch (error) {
+                showNotification('清除缓存失败', 'error');
+            }
+        }
+        
+        // 下载图片
+        function downloadImage(path) {
+            window.open(`/api/original/${encodeURIComponent(path)}`, '_blank');
+        }
+        
+        // 显示通知
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+        
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+        
+        // 防抖函数
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+        
+        // 监听窗口大小变化，重新渲染图片网格
+        // Masonry 会自动处理 resize，不需要手动重新渲染
+        // window.addEventListener('resize', debounce(renderImages, 250));
+
+        // 文件夹浏览器相关函数
+        function openFolderBrowser() {
+            const modal = document.getElementById('folder-modal');
+            modal.classList.add('active');
+            browserPath = currentPath;
+            loadFolders(browserPath);
+        }
+
+        function openAestheticFolderBrowser() {
+            folderSelectMode = 'aesthetic';
+            const modal = document.getElementById('folder-modal');
+            modal.classList.add('active');
+            const saved = localStorage.getItem('aesthetic_folder');
+            browserPath = saved || currentPath;
+            loadFolders(browserPath);
+        }
+
+        function closeFolderBrowser() {
+            const modal = document.getElementById('folder-modal');
+            modal.classList.remove('active');
+        }
+
+        async function loadFolders(path) {
+            try {
+                const response = await fetch(`/api/dirs?path=${encodeURIComponent(path)}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    showNotification(data.error, 'error');
+                    return;
+                }
+
+                browserPath = data.current;
+                document.getElementById('browser-current-path').textContent = browserPath || '根目录';
+                
+                // 更新面包屑
+                updateBreadcrumbs(browserPath);
+                
+                const list = document.getElementById('folder-list');
+                list.innerHTML = '';
+
+                // 添加 "返回上级" 选项 (如果不是根目录)
+                if (!data.is_root) {
+                    const li = document.createElement('li');
+                    li.className = 'folder-item';
+                    li.style.background = '#fff3cd'; // 淡黄色背景区分
+                    li.innerHTML = `
+                        <i class="fas fa-level-up-alt" style="color: #856404;"></i>
+                        <span>返回上级目录</span>
+                    `;
+                    li.onclick = () => navigateTo('..');
+                    list.appendChild(li);
+                }
+
+                data.dirs.forEach(dir => {
+                    // 跳过 '..' 因为我们已经手动添加了返回上级
+                    if (dir === '..') return;
+                    
+                    const li = document.createElement('li');
+                    li.className = 'folder-item';
+                    li.innerHTML = `
+                        <i class="fas fa-folder"></i>
+                        <span>${dir}</span>
+                    `;
+                    li.onclick = () => navigateTo(dir);
+                    list.appendChild(li);
+                });
+
+            } catch (error) {
+                showNotification('加载目录失败', 'error');
+            }
+        }
+
+        function updateBreadcrumbs(path) {
+            const container = document.getElementById('folder-breadcrumb');
+            container.innerHTML = '';
+            
+            if (!path) {
+                container.innerHTML = '<span class="breadcrumb-item" onclick="loadFolders(\'\')">此电脑</span>';
+                return;
+            }
+
+            // 添加根节点
+            const rootSpan = document.createElement('span');
+            rootSpan.className = 'breadcrumb-item';
+            rootSpan.textContent = '此电脑';
+            rootSpan.onclick = () => loadFolders('');
+            container.appendChild(rootSpan);
+            
+            container.appendChild(createSeparator());
+
+            // 分割路径
+            // Windows: C:\Users\Name -> ['C:', 'Users', 'Name']
+            // Unix: /home/user -> ['', 'home', 'user']
+            const isWindows = path.includes('\\') || path.includes(':');
+            const separator = isWindows ? '\\' : '/';
+            const parts = path.split(separator).filter(p => p);
+            
+            let currentBuildPath = '';
+            
+            parts.forEach((part, index) => {
+                if (isWindows && index === 0 && part.includes(':')) {
+                    currentBuildPath = part + '\\'; // Windows Drive
+                } else if (!isWindows && index === 0) {
+                    currentBuildPath = '/' + part; // Unix Root
+                } else {
+                    currentBuildPath += (currentBuildPath.endsWith(separator) ? '' : separator) + part;
+                }
+                
+                const span = document.createElement('span');
+                span.className = 'breadcrumb-item';
+                span.textContent = part;
+                // 使用闭包保存当前路径
+                const targetPath = currentBuildPath; 
+                span.onclick = () => loadFolders(targetPath);
+                container.appendChild(span);
+                
+                if (index < parts.length - 1) {
+                    container.appendChild(createSeparator());
+                }
+            });
+        }
+
+        function createSeparator() {
+            const span = document.createElement('span');
+            span.className = 'breadcrumb-separator';
+            span.innerHTML = '<i class="fas fa-chevron-right" style="font-size: 0.8em;"></i>';
+            return span;
+        }
+
+        function navigateTo(dir) {
+            let newPath;
+            if (dir === '..') {
+                // 简单的父目录处理
+                if (browserPath.endsWith('\\') || browserPath.endsWith('/')) {
+                    // 去掉末尾斜杠
+                    browserPath = browserPath.slice(0, -1);
+                }
+                
+                const separator = browserPath.includes('\\') ? '\\' : '/';
+                const lastIndex = browserPath.lastIndexOf(separator);
+                
+                if (lastIndex > 0) {
+                    newPath = browserPath.substring(0, lastIndex);
+                    // 如果是 Windows 驱动器根目录 (例如 D:)，需要保留斜杠吗？
+                    // 通常 D: 和 D:\ 是一样的，但 pathlib 处理可能不同。
+                    // 如果变成了 "D:"，pathlib 可能会认为是当前目录下的 D:
+                    if (newPath.endsWith(':')) {
+                        newPath += '\\';
+                    }
+                } else if (lastIndex === 0) {
+                    // Unix 根目录 /
+                    newPath = '/';
+                } else {
+                    // 已经是根或者无法解析，尝试回退到驱动器列表
+                    newPath = '';
+                }
+            } else {
+                if (!browserPath) {
+                    newPath = dir;
+                } else if (browserPath.endsWith('\\') || browserPath.endsWith('/')) {
+                    newPath = browserPath + dir;
+                } else {
+                    newPath = browserPath + (browserPath.includes('\\') ? '\\' : '/') + dir;
+                }
+            }
+            loadFolders(newPath);
+        }
+
+        function selectCurrentFolder() {
+            if (folderSelectMode === 'aesthetic') {
+                aestheticPath = browserPath;
+                localStorage.setItem('aesthetic_folder', aestheticPath);
+                closeFolderBrowser();
+                // 成为常驻路径显示
+                document.getElementById('aesthetic-path-display').textContent = aestheticPath;
+                // 进入/刷新审美模式
+                enterAestheticMode();
+                folderSelectMode = 'normal';
+                return;
+            }
+            currentPath = browserPath;
+            localStorage.setItem('last_folder', currentPath);
+            
+            closeFolderBrowser();
+            loadImages();
+            loadMarkedImages();
+            loadTrashInfo();
+            showNotification('已切换目录', 'success');
+        }
+
+        // ====== 审美提升模式（Aesthetic Mode）======
+
+        // 绑定按钮
+        document.getElementById('aesthetic-fab').addEventListener('click', async () => {
+            // 进入审美模式前必须选择目录
+            openAestheticFolderBrowser();
+        });
+
+        document.getElementById('aesthetic-exit').addEventListener('click', () => {
+            exitAestheticMode();
+        });
+
+        async function enterAestheticMode() {
+            aestheticMode = true;
+            aestheticAllItems = [];  // 清空缓存，强制刷新
+            
+            // Pinterest 风格：优先从 URL 恢复筛选状态
+            restoreAestheticFilterFromURL();
+            
+            // 如果 URL 中没有，则重置
+            if (!aestheticAuthor && !aestheticWork) {
+                aestheticAuthor = null;
+                aestheticWork = null;
+            }
+            
+            localStorage.setItem('aesthetic_active', 'true');
+            document.getElementById('aesthetic-exit').style.display = 'inline-flex';
+            // 隐藏主容器，显示审美容器
+            const mainContainer = document.querySelector('body > .container');
+            if (mainContainer) mainContainer.style.display = 'none';
+            document.getElementById('aesthetic-container').style.display = 'flex';
+            document.getElementById('aesthetic-path-display').textContent = aestheticPath || '未选择目录';
+            document.getElementById('aesthetic-count').textContent = '';
+            showNotification('已进入审美提升模式', 'info');
+            await reloadAesthetic(true);  // 强制刷新（会在内部从 URL 恢复状态）
+        }
+
+        function exitAestheticMode() {
+            aestheticMode = false;
+            aestheticAllItems = [];  // 清空缓存
+            aestheticItems = [];
+            aestheticAuthor = null;
+            aestheticWork = null;
+            localStorage.setItem('aesthetic_active', 'false');
+            document.getElementById('aesthetic-exit').style.display = 'none';
+            // 恢复常规模式
+            document.getElementById('aesthetic-container').style.display = 'none';
+            const mainContainer = document.querySelector('body > .container');
+            if (mainContainer) mainContainer.style.display = 'flex';
+            const agrid = document.getElementById('aesthetic-grid');
+            agrid.innerHTML = '';
+            loadImages();
+        }
+
+        async function reloadAesthetic(forceRefresh = false) {
+            try {
+                const grid = document.getElementById('aesthetic-grid');
+                
+                if (!aestheticPath) {
+                    grid.innerHTML = `<div class=\"loading\"><div class=\"spinner\"></div><p style=\"margin-top: 15px;\">等待选择目录...</p></div>`;
+                    return;
+                }
+                
+                // 如果有缓存数据且不强制刷新，直接使用前端筛选
+                if (aestheticAllItems.length > 0 && !forceRefresh) {
+                    applyAestheticFilter();
+                    return;
+                }
+                
+                // 显示加载状态
+                grid.innerHTML = `<div class=\"loading\"><div class=\"spinner\"></div><p style=\"margin-top: 15px;\">正在加载...</p></div>`;
+                
+                const params = new URLSearchParams();
+                params.set('folder', aestheticPath);
+                params.set('shuffle', 'true');
+                // 不传 author/work，获取全部数据
+
+                const res = await fetch(`/api/aesthetic?${params.toString()}`);
+                const data = await res.json();
+                
+                // 缓存完整数据，并记录原始索引（用于筛选后保持顺序）
+                aestheticAllItems = (data.items || []).map((item, idx) => ({
+                    ...item,
+                    _originalIndex: idx
+                }));
+                aestheticItems = [...aestheticAllItems];
+                
+                // 优先从 URL 恢复筛选状态（Pinterest 风格）
+                const urlRestored = restoreAestheticFilterFromURL();
+                
+                // 如果 URL 中没有参数，尝试从 localStorage 恢复
+                if (!urlRestored) {
+                    try {
+                        const saved = localStorage.getItem(`aesthetic_scroll_${aestheticPath}`);
+                        if (saved) {
+                            const scrollState = JSON.parse(saved);
+                            if (scrollState.author || scrollState.work) {
+                                aestheticAuthor = scrollState.author || null;
+                                aestheticWork = scrollState.work || null;
+                                // 同步到 URL
+                                updateAestheticURL();
+                            }
+                        }
+                    } catch (e) {
+                        console.error('恢复筛选状态失败:', e);
+                    }
+                }
+                
+                // 应用筛选（如果有）
+                if (aestheticAuthor || aestheticWork) {
+                    aestheticItems = aestheticAllItems.filter(item => {
+                        if (aestheticAuthor && item.author !== aestheticAuthor) return false;
+                        if (aestheticWork && item.work !== aestheticWork) return false;
+                        return true;
+                    });
+                    aestheticItems.sort((a, b) => a._originalIndex - b._originalIndex);
+                }
+                
+                // 首次加载，完整渲染
+                renderAestheticItems();
+                updateAestheticUI();
+                
+                // 恢复滚动位置在 renderAestheticItems 的图片加载完成后执行
+                
+                showNotification(`已加载 ${aestheticAllItems.length} 个作品`, 'success');
+            } catch (e) {
+                console.error(e);
+                showNotification('加载审美模式数据失败', 'error');
+            }
+        }
+        
+        // 更新审美模式 UI 状态（筛选信息、计数等）
+        function updateAestheticUI() {
+            const hasFilter = aestheticAuthor || aestheticWork;
+            const totalCount = aestheticAllItems.length;
+            const filteredCount = aestheticItems.length;
+            
+            const filterInfoEl = document.getElementById('aesthetic-filter-info');
+            if (hasFilter) {
+                let filterText = '';
+                if (aestheticAuthor && aestheticWork) {
+                    filterText = `${aestheticAuthor} · ${aestheticWork}`;
+                } else if (aestheticAuthor) {
+                    filterText = `作者: ${aestheticAuthor}`;
+                } else if (aestheticWork) {
+                    filterText = `作品: ${aestheticWork}`;
+                }
+                filterInfoEl.textContent = filterText;
+                filterInfoEl.style.display = 'inline';
+                document.getElementById('aesthetic-count').textContent = `${filteredCount} / ${totalCount} 项`;
+            } else {
+                filterInfoEl.style.display = 'none';
+                document.getElementById('aesthetic-count').textContent = `共 ${totalCount} 项`;
+            }
+            
+            document.getElementById('aesthetic-clear-filter').style.display = hasFilter ? 'inline-block' : 'none';
+        }
+        
+        // 保存审美模式滚动位置（使用缓存机制）
+        function saveAestheticScrollPosition() {
+            // 如果正在恢复位置，禁止保存（避免覆盖正确的位置）
+            if (isRestoringScrollPosition) {
+                return;
+            }
+            
+            if (!aestheticMode || !aestheticPath) return;
+            const scrollContainer = document.getElementById('aesthetic-scroll-container');
+            const grid = document.getElementById('aesthetic-grid');
+            if (!scrollContainer || !grid) return;
+            
+            // 找到当前可见区域的第一个图片元素
+            const items = Array.from(grid.querySelectorAll('.image-item'));
+            let targetOriginalIndex = null;
+            let targetItemIndex = -1;
+            
+            // 找到第一个可见的图片（在容器顶部附近）
+            const containerRect = scrollContainer.getBoundingClientRect();
+            const viewportTop = containerRect.top;
+            const viewportBottom = containerRect.bottom;
+            
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const itemRect = item.getBoundingClientRect();
+                
+                // 检查图片是否在可见区域内（优先选择靠近顶部的）
+                if (itemRect.top >= viewportTop - 100 && itemRect.top <= viewportBottom) {
+                    targetItemIndex = i;
+                    break;
+                }
+            }
+            
+            // 如果没找到，找最接近顶部的
+            if (targetItemIndex === -1 && items.length > 0) {
+                let minDistance = Infinity;
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    const itemRect = item.getBoundingClientRect();
+                    const distance = Math.abs(itemRect.top - viewportTop);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        targetItemIndex = i;
+                    }
+                }
+            }
+            
+            // 获取目标图片的 originalIndex
+            if (targetItemIndex >= 0 && targetItemIndex < aestheticItems.length) {
+                targetOriginalIndex = aestheticItems[targetItemIndex]._originalIndex;
+            }
+            
+            const scrollState = {
+                targetOriginalIndex: targetOriginalIndex,  // 主要使用这个
+                scrollTop: scrollContainer.scrollTop,      // 备用
+                author: aestheticAuthor,
+                work: aestheticWork,
+                renderedCount: aestheticRenderedCount
+            };
+            localStorage.setItem(`aesthetic_scroll_${aestheticPath}`, JSON.stringify(scrollState));
+            console.log('保存滚动位置:', scrollState); // 调试输出
+        }
+        
+        // 恢复审美模式滚动位置（使用缓存机制，更可靠）
+        function restoreAestheticScrollPosition() {
+            if (!aestheticMode || !aestheticPath) return;
+            const scrollContainer = document.getElementById('aesthetic-scroll-container');
+            const grid = document.getElementById('aesthetic-grid');
+            if (!scrollContainer || !grid) return;
+            
+            try {
+                const saved = localStorage.getItem(`aesthetic_scroll_${aestheticPath}`);
+                if (!saved) {
+                    console.log('没有保存的滚动位置');
+                    return;
+                }
+                
+                const scrollState = JSON.parse(saved);
+                console.log('恢复滚动位置:', scrollState, '当前筛选:', {author: aestheticAuthor, work: aestheticWork}); // 调试输出
+                
+                // 设置恢复标志，禁止在此期间保存
+                isRestoringScrollPosition = true;
+                
+                // 优先使用 targetOriginalIndex 定位（更准确，特别是清除筛选时）
+                if (scrollState.targetOriginalIndex !== null && scrollState.targetOriginalIndex !== undefined) {
+                    // 等待一下确保 DOM 已更新和 Masonry 布局完成
+                    setTimeout(() => {
+                        const items = Array.from(grid.querySelectorAll('.image-item'));
+                        console.log('当前渲染的图片数量:', items.length, 'aestheticItems 数量:', aestheticItems.length, '目标 originalIndex:', scrollState.targetOriginalIndex);
+                        
+                        // 在 aestheticItems 中找到对应的索引
+                        let targetItemIndex = -1;
+                        for (let i = 0; i < aestheticItems.length; i++) {
+                            if (aestheticItems[i]._originalIndex === scrollState.targetOriginalIndex) {
+                                targetItemIndex = i;
+                                break;
+                            }
+                        }
+                        
+                        console.log('目标图片索引:', targetItemIndex, 'originalIndex:', scrollState.targetOriginalIndex);
+                        
+                        // 如果目标图片还没渲染，先懒加载
+                        if (targetItemIndex >= 0 && targetItemIndex >= items.length) {
+                            console.log('目标图片未渲染，先加载更多图片...');
+                            const needLoad = targetItemIndex - items.length + 10; // 多加载一些
+                            loadMoreAesthetic(needLoad);
+                            
+                            // 等待加载完成后再恢复
+                            setTimeout(() => {
+                                restoreAestheticScrollPosition();
+                            }, 200);
+                            return;
+                        }
+                        
+                        if (targetItemIndex >= 0 && targetItemIndex < items.length) {
+                            const targetItem = items[targetItemIndex];
+                            
+                            // 确保元素可见
+                            if (targetItem.offsetParent !== null) {
+                                // 先尝试使用 scrollIntoView
+                                targetItem.scrollIntoView({ 
+                                    behavior: 'auto', 
+                                    block: 'start',
+                                    inline: 'nearest'
+                                });
+                                
+                                // 如果 scrollIntoView 没有正确滚动，使用手动计算
+                                setTimeout(() => {
+                                    const containerRect = scrollContainer.getBoundingClientRect();
+                                    const itemRect = targetItem.getBoundingClientRect();
+                                    
+                                    // 检查是否真的滚动到了目标位置
+                                    if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
+                                        // 手动计算并设置 scrollTop
+                                        let offsetTop = 0;
+                                        let element = targetItem;
+                                        while (element && element !== scrollContainer) {
+                                            offsetTop += element.offsetTop;
+                                            element = element.offsetParent;
+                                        }
+                                        scrollContainer.scrollTop = Math.max(0, offsetTop - 20); // 留一点边距
+                                        console.log('手动设置 scrollTop:', scrollContainer.scrollTop);
+                                    }
+                                }, 50);
+                                
+                                console.log('✓ 已滚动到目标图片，索引:', targetItemIndex, 'originalIndex:', scrollState.targetOriginalIndex);
+                                
+                                // 恢复完成，清除标志（延迟一点确保滚动完成）
+                                setTimeout(() => {
+                                    isRestoringScrollPosition = false;
+                                }, 300);
+                            } else {
+                                console.warn('目标图片元素不可见，尝试使用 scrollTop');
+                                // 计算目标元素的位置
+                                let offsetTop = 0;
+                                let element = targetItem;
+                                while (element && element !== scrollContainer) {
+                                    offsetTop += element.offsetTop;
+                                    element = element.offsetParent;
+                                }
+                                scrollContainer.scrollTop = Math.max(0, offsetTop - 20);
+                                
+                                // 恢复完成，清除标志
+                                setTimeout(() => {
+                                    isRestoringScrollPosition = false;
+                                }, 300);
+                            }
+                        } else {
+                            console.warn('未找到目标图片，索引:', targetItemIndex, 'originalIndex:', scrollState.targetOriginalIndex, 'items.length:', items.length);
+                            // 回退到使用 scrollTop
+                            if (scrollState.scrollTop !== undefined && scrollState.scrollTop > 0) {
+                                scrollContainer.scrollTop = scrollState.scrollTop;
+                                console.log('使用 scrollTop 恢复:', scrollState.scrollTop);
+                            }
+                            
+                            // 恢复完成，清除标志
+                            setTimeout(() => {
+                                isRestoringScrollPosition = false;
+                            }, 300);
+                        }
+                    }, 150);
+                    return;
+                }
+                
+                // 如果没有 targetOriginalIndex，使用 scrollTop（向后兼容）
+                if (scrollState.scrollTop !== undefined) {
+                    scrollContainer.scrollTop = scrollState.scrollTop;
+                    console.log('使用 scrollTop 恢复（无索引）:', scrollState.scrollTop);
+                }
+                
+                // 恢复完成，清除标志
+                setTimeout(() => {
+                    isRestoringScrollPosition = false;
+                }, 300);
+            } catch (e) {
+                console.error('恢复滚动位置失败:', e);
+                // 出错时也要清除标志
+                isRestoringScrollPosition = false;
+            }
+        }
+        
+        // Pinterest 风格：更新 URL 参数但不刷新页面
+        function updateAestheticURL() {
+            if (!aestheticMode || !aestheticPath) return;
+            
+            const params = new URLSearchParams(window.location.search);
+            
+            // 更新或删除筛选参数
+            if (aestheticAuthor) {
+                params.set('author', aestheticAuthor);
+            } else {
+                params.delete('author');
+            }
+            
+            if (aestheticWork) {
+                params.set('work', aestheticWork);
+            } else {
+                params.delete('work');
+            }
+            
+            // 使用 replaceState 避免在历史记录中创建过多条目
+            const newURL = params.toString() 
+                ? `${window.location.pathname}?${params.toString()}`
+                : window.location.pathname;
+            
+            window.history.replaceState(
+                { author: aestheticAuthor, work: aestheticWork },
+                '',
+                newURL
+            );
+        }
+        
+        // 从 URL 参数恢复筛选状态
+        function restoreAestheticFilterFromURL() {
+            if (!aestheticMode) return false;
+            
+            const params = new URLSearchParams(window.location.search);
+            const urlAuthor = params.get('author');
+            const urlWork = params.get('work');
+            
+            // 如果 URL 中有参数且与当前状态不同，则恢复
+            if (urlAuthor !== aestheticAuthor || urlWork !== aestheticWork) {
+                aestheticAuthor = urlAuthor || null;
+                aestheticWork = urlWork || null;
+                return true;  // 表示需要应用筛选
+            }
+            
+            return false;  // 无需改变
+        }
+        
+        // 前端筛选函数（不发起网络请求，筛选后按原始索引排序保持顺序一致）
+        function applyAestheticFilter() {
+            const hasFilter = aestheticAuthor || aestheticWork;
+            
+            // 更新 URL（Pinterest 风格：不刷新页面）
+            updateAestheticURL();
+            
+            // 保存当前滚动位置
+            saveAestheticScrollPosition();
+            
+            // 记住之前渲染了多少张图片
+            const previousRenderedCount = aestheticRenderedCount;
+            
+            // 从缓存中筛选，保留原始索引 (_originalIndex)
+            if (hasFilter) {
+                aestheticItems = aestheticAllItems.filter(item => {
+                    if (aestheticAuthor && item.author !== aestheticAuthor) return false;
+                    if (aestheticWork && item.work !== aestheticWork) return false;
+                    return true;
+                });
+            } else {
+                aestheticItems = [...aestheticAllItems];
+            }
+            
+            // 按原始索引排序，确保顺序一致
+            aestheticItems.sort((a, b) => a._originalIndex - b._originalIndex);
+            
+            // 重新渲染，保持之前的渲染数量（或者新筛选结果的全部，取较小值）
+            renderAestheticItems(hasFilter ? null : previousRenderedCount);
+            
+            // 更新 UI
+            updateAestheticUI();
+            
+            // 恢复滚动位置在 renderAestheticItems 的图片加载完成后执行
+        }
+
+        function renderAestheticItems(preserveCount = null) {
+            const grid = document.getElementById('aesthetic-grid');
+            grid.innerHTML = '';
+
+            // 如果指定了 preserveCount，使用它；否则使用默认批次大小
+            if (preserveCount !== null && preserveCount > AESTHETIC_BATCH_SIZE) {
+                aestheticRenderedCount = Math.min(preserveCount, aestheticItems.length);
+            } else {
+                aestheticRenderedCount = Math.min(AESTHETIC_BATCH_SIZE, aestheticItems.length);
+            }
+            
+            const initialBatch = aestheticItems.slice(0, aestheticRenderedCount);
+            grid.innerHTML = initialBatch.map((item, idx) => {
+                const author = (item.author || '').replace(/"/g, '&quot;');
+                const work = (item.work || '').replace(/"/g, '&quot;');
+                return `<div class="image-item" data-author="${author}" data-work="${work}">${createAestheticHTML(item, idx)}</div>`;
+            }).join('');
+
+            // 初始化 Masonry
+            if (msnry) {
+                msnry.destroy();
+            }
+            msnry = new Masonry(grid, { itemSelector: '.image-item', percentPosition: true });
+            imagesLoaded(grid).on('progress', function () { if (msnry) msnry.layout(); });
+            
+            // 图片加载完成后恢复滚动位置（使用缓存机制）
+            imagesLoaded(grid).on('always', function() {
+                // 等待 Masonry 布局完成和 DOM 更新
+                setTimeout(() => {
+                    restoreAestheticScrollPosition();
+                }, 300);
+            });
+
+            // 初始化审美模式 Viewer（仅用于大图预览）
+            if (window.aestheticViewer) {
+                window.aestheticViewer.destroy();
+            }
+            window.aestheticViewer = new Viewer(grid, {
+                url: 'data-original',
+                toolbar: {
+                    zoomIn: 1,
+                    zoomOut: 1,
+                    oneToOne: 1,
+                    reset: 1,
+                    prev: 1,
+                    play: 0,
+                    next: 1,
+                    rotateLeft: 1,
+                    rotateRight: 1,
+                    flipHorizontal: 1,
+                    flipVertical: 1,
+                },
+                title: function (image) {
+                    return image.alt;
+                },
+                viewed() {
+                    updateAestheticViewerUI(this.image);
+                },
+            });
+
+            // 事件委托已在初始化时设置，无需逐个绑定
+        }
+
+        function createAestheticHTML(item, idx) {
+            const encoded = encodeURIComponent(item.path);
+            const safePath = item.path.replace(/\\/g, '\\\\');
+            const author = item.author || '';
+            const work = item.work || '';
+            let metaHTML = '';
+            if (author || work) {
+                metaHTML = `
+                <div class="aesthetic-meta" style="display:flex; gap:6px; align-items:center; padding:6px 6px 0 6px; font-size:12px; color:#555;">
+                    ${author ? `<span class="author" data-author="${author}" style="cursor:pointer; font-weight:600; color:#e60023;">${author}</span>` : ''}
+                    ${work ? `<span class="work" data-author="${author}" data-work="${work}" style="cursor:pointer; color:#333;">· ${work}</span>` : ''}
+                </div>`;
+            }
+            return `
+                <div class="image-card" style="position:relative;">
+                    <img class="image-thumbnail" 
+                         src="/api/thumbnail/${encoded}?v=${item.mtime}&t=${Date.now()}" 
+                         data-original="/api/preview/${encoded}?v=${item.mtime}&t=${Date.now()}" 
+                         alt="${item.name}" 
+                         onclick="previewImage('${safePath}')" />
+                    <button class="action-btn mark-btn" title="标记/取消标记" onclick="event.stopPropagation(); toggleMarkFor('${item.name}')" style="position:absolute; top:10px; right:10px;">
+                        <i class="fas fa-star"></i>
+                    </button>
+                    ${metaHTML}
+                    <div class="image-info">
+                        <div class="image-name" title="${item.name}">${item.name}</div>
+                        <div class="image-meta"><span>${item.date}</span><span>${item.type}</span></div>
+                    </div>
+                </div>`;
+        }
+
+        // 审美模式 Viewer 仅保留标记功能的自定义 UI
+        function updateAestheticViewerUI(image) {
+            const existingUI = document.querySelector('.viewer-custom-ui');
+            if (existingUI) existingUI.remove();
+
+            const ui = document.createElement('div');
+            ui.className = 'viewer-custom-ui';
+            ui.style.zIndex = '2020';
+            ui.style.opacity = '1';
+            ui.style.display = 'flex';
+            ui.style.position = 'fixed';
+            ui.style.bottom = '30px';
+            ui.style.left = '50%';
+            ui.style.transform = 'translateX(-50%)';
+
+            const filename = image.alt;
+            const html = `
+                <button class="action-icon-btn" id="viewer-aesthetic-mark-btn">
+                    <i class="fas fa-star"></i>
+                    <span>标记</span>
+                </button>
+            `;
+            ui.innerHTML = html;
+            document.querySelector('.viewer-container').appendChild(ui);
+
+            document.getElementById('viewer-aesthetic-mark-btn').onclick = (e) => {
+                e.stopPropagation();
+                toggleMarkFor(filename);
+            };
+        }
+
+        function clearAestheticFilter() {
+            // 在清除筛选前，先保存当前的滚动位置（筛选状态下的位置）
+            // 需要确保使用筛选状态下的 aestheticItems，并且滚动位置有效
+            const scrollContainer = document.getElementById('aesthetic-scroll-container');
+            const grid = document.getElementById('aesthetic-grid');
+            let savedState = null;
+            
+            if (scrollContainer && grid && scrollContainer.scrollTop > 0) {
+                const items = Array.from(grid.querySelectorAll('.image-item'));
+                let targetOriginalIndex = null;
+                let targetItemIndex = -1;
+                
+                const containerRect = scrollContainer.getBoundingClientRect();
+                const viewportTop = containerRect.top;
+                const viewportBottom = containerRect.bottom;
+                
+                // 找到第一个可见的图片（使用当前的 aestheticItems，即筛选后的结果）
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    const itemRect = item.getBoundingClientRect();
+                    
+                    // 检查图片是否在可见区域内（优先选择靠近顶部的）
+                    if (itemRect.top >= viewportTop - 100 && itemRect.top <= viewportBottom) {
+                        targetItemIndex = i;
+                        break;
+                    }
+                }
+                
+                // 如果没找到，找最接近顶部的
+                if (targetItemIndex === -1 && items.length > 0) {
+                    let minDistance = Infinity;
+                    for (let i = 0; i < items.length; i++) {
+                        const item = items[i];
+                        const itemRect = item.getBoundingClientRect();
+                        const distance = Math.abs(itemRect.top - viewportTop);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            targetItemIndex = i;
+                        }
+                    }
+                }
+                
+                // 获取目标图片的 originalIndex（使用筛选状态下的 aestheticItems）
+                if (targetItemIndex >= 0 && targetItemIndex < aestheticItems.length) {
+                    targetOriginalIndex = aestheticItems[targetItemIndex]._originalIndex;
+                    console.log('清除筛选前找到图片 - 索引:', targetItemIndex, 'originalIndex:', targetOriginalIndex, 'scrollTop:', scrollContainer.scrollTop);
+                    
+                    // 保存到 localStorage（使用筛选状态下的数据）
+                    savedState = {
+                        targetOriginalIndex: targetOriginalIndex,
+                        scrollTop: scrollContainer.scrollTop,
+                        author: aestheticAuthor,  // 保存当前的筛选状态
+                        work: aestheticWork,
+                        renderedCount: aestheticRenderedCount
+                    };
+                    localStorage.setItem(`aesthetic_scroll_${aestheticPath}`, JSON.stringify(savedState));
+                    console.log('清除筛选前保存位置:', savedState);
+                } else {
+                    console.warn('清除筛选前未找到可见图片 - targetItemIndex:', targetItemIndex, 'items.length:', items.length, 'aestheticItems.length:', aestheticItems.length, 'scrollTop:', scrollContainer.scrollTop);
+                }
+            } else {
+                console.warn('清除筛选前无法保存位置 - scrollTop:', scrollContainer?.scrollTop, 'grid存在:', !!grid);
+            }
+            
+            const previousRenderedCount = aestheticRenderedCount;
+            aestheticAuthor = null;
+            aestheticWork = null;
+            
+            // 更新 URL（Pinterest 风格：清除筛选参数）
+            updateAestheticURL();
+            
+            // 恢复全部数据
+            aestheticItems = [...aestheticAllItems];
+            aestheticItems.sort((a, b) => a._originalIndex - b._originalIndex);
+            
+            // 重新渲染，保持之前的渲染数量
+            renderAestheticItems(previousRenderedCount);
+            
+            // 更新 UI
+            updateAestheticUI();
+            
+            // 恢复滚动位置在 renderAestheticItems 的图片加载完成后执行
+            
+            showNotification('已清除筛选', 'info');
+        }
+
+        // 审美模式懒加载更多缩略图
+        function loadMoreAesthetic(count) {
+            if (aestheticRenderedCount >= aestheticItems.length) return;
+
+            const start = aestheticRenderedCount;
+            const nextBatch = aestheticItems.slice(start, start + count);
+            if (nextBatch.length === 0) return;
+
+            const grid = document.getElementById('aesthetic-grid');
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = nextBatch.map((item, idx) => {
+                const author = (item.author || '').replace(/"/g, '&quot;');
+                const work = (item.work || '').replace(/"/g, '&quot;');
+                return `<div class="image-item" data-author="${author}" data-work="${work}">${createAestheticHTML(item, start + idx)}</div>`;
+            }).join('');
+
+            const newElements = Array.from(tempDiv.children);
+            newElements.forEach(el => grid.appendChild(el));
+
+            // 事件委托已在初始化时设置，懒加载的元素自动支持点击筛选
+
+            if (msnry) {
+                msnry.appended(newElements);
+            }
+
+            if (window.aestheticViewer) {
+                window.aestheticViewer.update();
+            }
+
+            imagesLoaded(newElements).on('progress', function () {
+                if (msnry) msnry.layout();
+            });
+
+            aestheticRenderedCount += nextBatch.length;
+        }
+
+        async function toggleMarkFor(filename) {
+            if (!aestheticPath) return;
+            try {
+                const response = await fetch('/api/mark', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ filename: filename, folder: aestheticPath, mark: true })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showNotification(`标记成功 (${result.count}个文件)`, 'success');
+                }
+            } catch (e) {
+                showNotification('标记失败', 'error');
+            }
+        }
+    </script>
+</body>
+</html>

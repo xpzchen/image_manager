@@ -247,6 +247,33 @@
             filter: brightness(0.95);
         }
         
+        /* 批量模式样式 */
+        .image-card.selected {
+            border: 3px solid #e60023;
+            box-shadow: 0 0 0 2px rgba(230, 0, 35, 0.2);
+        }
+        
+        .batch-checkbox {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 4px;
+            padding: 4px;
+        }
+        
+        .batch-checkbox input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #e60023;
+        }
+        
+        .image-card.selected .batch-checkbox {
+            background: rgba(230, 0, 35, 0.1);
+        }
+        
         .image-thumbnail {
             border-radius: 16px;
             width: 100%;
@@ -803,16 +830,41 @@
                     <span id="trash-badge" class="badge" style="display: none;">0</span>
                 </button>
                 <button class="btn btn-danger" onclick="clearCache()"><i class="fas fa-broom"></i></button>
+                <button class="btn btn-info" id="batch-mode-btn" onclick="toggleBatchMode()">
+                    <i class="fas fa-check-square"></i> 批量
+                </button>
+            </div>
+        </div>
+        
+        <!-- 批量操作工具栏 -->
+        <div id="batch-toolbar" style="display:none; background:#fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding:10px 20px; position:sticky; top:0; z-index:100; border-bottom:1px solid #e0e0e0;">
+            <div style="display:flex; align-items:center; gap:15px;">
+                <span id="batch-count" style="font-weight:bold; color:#e60023;">已选择 0 项</span>
+                <button class="btn btn-sm" onclick="selectAllImages()" style="background:#f0f2f5; color:#333;">
+                    <i class="fas fa-check-double"></i> 全选
+                </button>
+                <button class="btn btn-sm" onclick="clearSelection()" style="background:#f0f2f5; color:#333;">
+                    <i class="fas fa-times"></i> 取消选择
+                </button>
+                <div style="flex:1;"></div>
+                <button class="btn btn-sm btn-primary" onclick="batchMark()" style="background:#e60023; color:#fff;">
+                    <i class="fas fa-star"></i> 批量标记
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="batchDelete()" style="background:#dc3545; color:#fff;">
+                    <i class="fas fa-trash"></i> 批量删除
+                </button>
+                <button class="btn btn-sm" onclick="toggleBatchMode()" style="background:#f0f2f5; color:#333;">
+                    <i class="fas fa-times"></i> 退出批量
+                </button>
             </div>
         </div>
         
         <div class="main-content">
-            <div class="image-scroll-container">
-                <div class="image-grid" id="image-grid">
-                    <div class="loading">
-                        <div class="spinner"></div>
-                        <p style="margin-top: 15px;">正在加载图片...</p>
-                    </div>
+            <div class="image-scroll-container" id="main-scroll-container">
+                <!-- 标签容器：每个标签保持独立的DOM，不删除 -->
+                <div id="filter-layers" style="position:relative; width:100%;">
+                    <!-- 动态创建的标签容器会插入这里 -->
+                    <!-- 全部、JPG、已标记、RAW 各自独立的容器 -->
                 </div>
             </div>
         </div>
@@ -829,8 +881,9 @@
                 <i class="fas fa-folder-open"></i>
             </button>
             <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+                <span id="aesthetic-filter-info" style="font-size:12px; color:#e60023; font-weight:600; display:none;"></span>
                 <button class="btn" id="aesthetic-clear-filter" style="background:#f0f2f5; color:#333; display:none;" onclick="clearAestheticFilter()">
-                    清空筛选
+                    <i class="fas fa-times"></i> 清空筛选
                 </button>
                 <span id="aesthetic-count" style="font-size:12px; color:#666;"></span>
             </div>
@@ -841,6 +894,31 @@
                     <div class="spinner"></div>
                     <p style="margin-top: 15px;">等待选择目录...</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 筛选结果查看器：独立面板，不影响主页面DOM -->
+    <div id="filter-viewer" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:2000; background:white; flex-direction:column;">
+        <header style="background:#fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05); padding:10px 20px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #e0e0e0;">
+            <h2 style="font-size: 16px; color:#e60023; margin-right:10px; display:flex; align-items:center; gap:8px;">
+                <i class="fas fa-filter"></i> 筛选结果
+            </h2>
+            <button class="btn" id="filter-viewer-back-btn" onclick="filterViewerGoBack()" style="background:#f0f2f5; color:#333; display:none;">
+                <i class="fas fa-arrow-left"></i> 回退
+            </button>
+            <div id="filter-viewer-breadcrumb" style="font-size:14px; color:#333; flex:1; display:flex; align-items:center; gap:8px;">
+                <span id="filter-viewer-path" style="color:#e60023; font-weight:600;"></span>
+            </div>
+            <span id="filter-viewer-count" style="font-size:12px; color:#666; margin-right:10px;"></span>
+            <button class="btn" onclick="closeFilterViewer()" style="background:#f0f2f5; color:#333;">
+                <i class="fas fa-times"></i> 关闭
+            </button>
+        </header>
+        <div class="image-scroll-container" id="filter-viewer-scroll-container" style="flex:1; overflow-y:auto; position:relative;">
+            <!-- 筛选层级容器：每个层级保持独立的DOM，不删除 -->
+            <div id="filter-viewer-layers" style="position:relative; width:100%;">
+                <!-- 动态创建的筛选层级会插入这里 -->
             </div>
         </div>
     </div>
@@ -977,26 +1055,40 @@
         let allImages = [];
         let processedImages = []; // Filtered and sorted images
         let renderedCount = 0;
-        const BATCH_SIZE = 20;
+        const BATCH_SIZE = 30;
+        const INITIAL_SIZE = 30;  // 初始只渲染30个，确保在可见区域
+        const LOAD_THRESHOLD = 0.4;  // 滚动到70%时开始加载更多
         const AESTHETIC_BATCH_SIZE = 30;
+        const AESTHETIC_INITIAL_SIZE = 30;  // 初始只渲染30个，确保在可见区域
+        const AESTHETIC_LOAD_THRESHOLD = 0.7;  // 滚动到70%时开始加载更多
         let msnry = null;
         let currentFilter = 'all';
         let currentSort = 'date';
         let currentPreview = null;
+        
+        // 标签独立DOM管理：每个标签保持独立的DOM空间
+        let filterLayers = {};  // 存储每个标签的Masonry、Viewer、滚动位置等
+        let filterRenderedCounts = {};  // 存储每个标签的渲染数量
         let markedImages = new Set();
         let currentPath = '.';
         let browserPath = '.';
         
         let showRaw = false;
         
+        // 批量处理模式
+        let batchMode = false;  // 是否开启批量选择模式
+        let selectedImages = new Set();  // 选中的图片文件名集合
+        
         // 审美模式独立状态
         let folderSelectMode = 'normal'; // 'normal' | 'aesthetic'
         let aestheticMode = false;
-        let aestheticItems = [];
+        let aestheticAllItems = [];  // 缓存完整数据，用于前端筛选
+        let aestheticItems = [];     // 当前显示的数据（可能经过筛选）
         let aestheticAuthor = null;
         let aestheticWork = null;
         let aestheticPath = null;
         let aestheticRenderedCount = 0;
+        // let isRestoringScrollPosition = false;  // 标志：正在恢复滚动位置（已禁用，使用筛选查看器后不再需要）
 
         // 初始化
         document.addEventListener('DOMContentLoaded', function() {
@@ -1030,6 +1122,13 @@
             // 添加键盘快捷键
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
+                    // 优先关闭筛选查看器
+                    const viewer = document.getElementById('filter-viewer');
+                    if (viewer && viewer.style.display === 'flex') {
+                        closeFilterViewer();
+                        return;
+                    }
+                    // 然后关闭预览和对比
                     closePreview();
                     closeCompare();
                 }
@@ -1039,23 +1138,151 @@
             });
 
 
-            // Grid Infinite Scroll
-            const scrollContainer = document.querySelector('.image-scroll-container');
-            scrollContainer.addEventListener('scroll', debounce(function() {
-                if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 500) {
-                    loadMoreImages(10); // Load more when scrolling near bottom
-                }
-            }, 100));
+            // Grid Infinite Scroll（支持多标签独立滚动位置）
+            const scrollContainer = document.getElementById('main-scroll-container');
+            if (scrollContainer) {
+                scrollContainer.addEventListener('scroll', debounce(function() {
+                    // 保存当前标签的滚动位置
+                    if (filterLayers[currentFilter]) {
+                        filterLayers[currentFilter].scrollTop = scrollContainer.scrollTop;
+                    }
+                    
+                    // 获取当前标签的数据
+                    const layer = filterLayers[currentFilter];
+                    if (!layer) return;
+                    
+                    // 渐进式加载：如果已经全部渲染，不需要加载
+                    if (layer.renderedCount >= layer.items.length) return;
+                    
+                    // 计算滚动进度（0-1）
+                    const scrollTop = scrollContainer.scrollTop;
+                    const scrollHeight = scrollContainer.scrollHeight;
+                    const clientHeight = scrollContainer.clientHeight;
+                    const scrollProgress = scrollTop / (scrollHeight - clientHeight);
+                    
+                    // 当滚动到阈值时，开始加载更多（确保内容在屏幕下方）
+                    if (scrollProgress >= LOAD_THRESHOLD) {
+                        const remaining = layer.items.length - layer.renderedCount;
+                        const loadCount = Math.min(8, remaining);  // 每次加载8个，避免堆积
+                        
+                        if (loadCount > 0) {
+                            loadMoreImagesForFilter(currentFilter, loadCount);
+                        }
+                    }
+                }, 50));  // 减少防抖时间，响应更快
+            }
 
             const aestheticScrollContainer = document.getElementById('aesthetic-scroll-container');
             if (aestheticScrollContainer) {
                 aestheticScrollContainer.addEventListener('scroll', debounce(function() {
                     if (!aestheticMode) return;
-                    if (aestheticScrollContainer.scrollTop + aestheticScrollContainer.clientHeight >= aestheticScrollContainer.scrollHeight - 500) {
-                        loadMoreAesthetic(Math.max(10, Math.floor(AESTHETIC_BATCH_SIZE / 2)));
+                    // 保存滚动位置（已禁用，使用筛选查看器后不再需要）
+                    // saveAestheticScrollPosition();
+                    
+                    // 渐进式加载：如果已经全部渲染，不需要加载
+                    if (aestheticRenderedCount >= aestheticItems.length) return;
+                    
+                    // 计算滚动进度（0-1）
+                    const scrollTop = aestheticScrollContainer.scrollTop;
+                    const scrollHeight = aestheticScrollContainer.scrollHeight;
+                    const clientHeight = aestheticScrollContainer.clientHeight;
+                    const scrollProgress = scrollTop / (scrollHeight - clientHeight);
+                    
+                    // 当滚动到阈值时，开始加载更多（确保内容在屏幕下方）
+                    if (scrollProgress >= AESTHETIC_LOAD_THRESHOLD) {
+                        const remaining = aestheticItems.length - aestheticRenderedCount;
+                        const loadCount = Math.min(8, remaining);  // 每次加载8个，避免堆积
+                        
+                        if (loadCount > 0) {
+                            loadMoreAesthetic(loadCount);
+                        }
                     }
-                }, 100));
+                }, 50));  // 减少防抖时间，响应更快
             }
+            
+            // 使用事件委托处理审美模式的筛选点击（这样懒加载的元素也能响应）
+            const aestheticGrid = document.getElementById('aesthetic-grid');
+            if (aestheticGrid) {
+                aestheticGrid.addEventListener('click', function(e) {
+                    // 使用 closest 向上查找 .author 或 .work 元素
+                    const authorEl = e.target.closest('.author');
+                    const workEl = e.target.closest('.work');
+                    
+                    // 处理作者点击（确保在 .aesthetic-meta 内）
+                    // 处理作者点击（确保在 .aesthetic-meta 内）
+                    // 新方案：打开筛选查看器，不修改主页面DOM
+                    if (authorEl && authorEl.closest('.aesthetic-meta')) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const author = authorEl.dataset.author;
+                        console.log('点击了作者:', author); // 调试输出
+                        openFilterViewer(author, null);
+                        showNotification(`筛选作者: ${author}`, 'info');
+                        return;
+                    }
+                    
+                    // 处理作品点击（确保在 .aesthetic-meta 内）
+                    // 新方案：打开筛选查看器，不修改主页面DOM
+                    if (workEl && workEl.closest('.aesthetic-meta')) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const author = workEl.dataset.author || '';
+                        const work = workEl.dataset.work;
+                        console.log('点击了作品:', work); // 调试输出
+                        openFilterViewer(author, work);
+                        showNotification(`筛选作品: ${work}`, 'info');
+                        return;
+                    }
+                });
+            }
+            
+            // Pinterest 风格：监听浏览器前进/后退按钮
+            window.addEventListener('popstate', function(event) {
+                if (!aestheticMode) return;
+                
+                // 从 URL 恢复筛选状态
+                if (restoreAestheticFilterFromURL()) {
+                    // 如果状态改变了，应用筛选（不重新加载数据）
+                    applyAestheticFilter();
+                }
+            });
+
+            // 筛选查看器：事件委托，支持点击作者/作品进行二次筛选（绑定到层级容器，支持所有层级）
+            // 注意：每个层级都有自己的滚动监听器，在 renderFilterViewerLayer 中设置
+            const filterViewerLayersContainer = document.getElementById('filter-viewer-layers');
+            if (filterViewerLayersContainer) {
+                filterViewerLayersContainer.addEventListener('click', function(e) {
+                    // 使用 closest 向上查找 .author 或 .work 元素
+                    const authorEl = e.target.closest('.author');
+                    const workEl = e.target.closest('.work');
+                    
+                    // 处理作者点击（确保在 .aesthetic-meta 内）
+                    if (authorEl && authorEl.closest('.aesthetic-meta')) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const author = authorEl.dataset.author;
+                        console.log('筛选查看器中点击了作者:', author);
+                        // 基于当前筛选结果进行二次筛选
+                        openFilterViewer(author, null, filterViewerCurrentState.items);
+                        showNotification(`二次筛选作者: ${author}`, 'info');
+                        return;
+                    }
+                    
+                    // 处理作品点击（确保在 .aesthetic-meta 内）
+                    if (workEl && workEl.closest('.aesthetic-meta')) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const author = workEl.dataset.author || '';
+                        const work = workEl.dataset.work;
+                        console.log('筛选查看器中点击了作品:', work);
+                        // 基于当前筛选结果进行二次筛选
+                        openFilterViewer(author, work, filterViewerCurrentState.items);
+                        showNotification(`二次筛选作品: ${work}`, 'info');
+                        return;
+                    }
+                });
+            }
+
         });
         
         // 加载图片
@@ -1108,18 +1335,23 @@
             document.getElementById('marked-count').textContent = markedImages.size;
         }
         
-        // 渲染图片 (Initial Render)
+        // 渲染图片（为每个标签创建独立的DOM空间）
         function renderImages() {
-            const grid = document.getElementById('image-grid');
+            console.log('[renderImages] 开始渲染所有标签', {
+                allImagesCount: allImages.length,
+                currentFilter: currentFilter
+            });
             
-            // 如果之前有 Masonry 实例，先销毁
-            if (msnry) {
-                msnry.destroy();
-                msnry = null;
+            const layersContainer = document.getElementById('filter-layers');
+            if (!layersContainer) {
+                console.error('[renderImages] filter-layers 容器不存在');
+                return;
             }
 
             if (allImages.length === 0) {
-                grid.innerHTML = `
+                console.log('[renderImages] 没有图片，显示空状态');
+                // 清空所有标签容器
+                layersContainer.innerHTML = `
                     <div class="no-images">
                         <i class="fas fa-image" style="font-size: 48px; margin-bottom: 20px; opacity: 0.3;"></i>
                         <p>没有找到图片</p>
@@ -1129,68 +1361,359 @@
                 return;
             }
             
-            // 过滤和排序
-            processedImages = filterImages(allImages);
-            processedImages = sortImages(processedImages);
-            
-            // Reset rendered count
-            renderedCount = Math.min(BATCH_SIZE, processedImages.length);
-            
-            // 生成HTML for initial batch
-            const initialBatch = processedImages.slice(0, renderedCount);
-            grid.innerHTML = initialBatch.map(img => createImageHTML(img)).join('');
-
-            // 初始化 Masonry
-            msnry = new Masonry(grid, {
-                itemSelector: '.image-item',
-                percentPosition: true
+            // 清除所有标签的渲染状态，强制重新渲染（数据已变化）
+            console.log('[renderImages] 清除所有标签的渲染状态');
+            Object.keys(filterLayers).forEach(filter => {
+                if (filterLayers[filter]) {
+                    filterLayers[filter].rendered = false;
+                    console.log(`[renderImages] 重置 ${filter} 的渲染状态`);
+                }
             });
-
-            // 初始化 Viewer.js
-            if (window.galleryViewer) {
-                window.galleryViewer.destroy();
+            
+            // 为所有标签创建/更新独立的容器
+            const filters = ['all', 'jpg', 'marked', 'raw'];
+            console.log('[renderImages] 开始渲染所有标签:', filters);
+            filters.forEach(filter => {
+                renderFilterLayer(filter);
+            });
+            
+            // 显示当前标签
+            console.log(`[renderImages] 显示当前标签: ${currentFilter}`);
+            showFilterLayer(currentFilter);
+            
+            console.log('[renderImages] 所有标签渲染完成');
+        }
+        
+        // 渲染单个标签的容器（参考审美模式的思路：保持DOM独立，只在首次渲染时创建）
+        function renderFilterLayer(filter) {
+            console.log(`[renderFilterLayer] 开始渲染标签: ${filter}`);
+            
+            const layersContainer = document.getElementById('filter-layers');
+            if (!layersContainer) {
+                console.error(`[renderFilterLayer] ${filter}: filter-layers 容器不存在`);
+                return;
             }
-            window.galleryViewer = new Viewer(grid, {
-                url: 'data-original',
-                toolbar: {
-                    zoomIn: 1,
-                    zoomOut: 1,
-                    oneToOne: 1,
-                    reset: 1,
-                    prev: 1,
-                    play: 1,
-                    next: 1,
-                    rotateLeft: 1,
-                    rotateRight: 1,
-                    flipHorizontal: 1,
-                    flipVertical: 1,
-                },
-                title: function (image) {
-                    return image.alt + ' (' + (this.index + 1) + '/' + this.length + ')';
-                },
-                viewed() {
-                    updateViewerCustomUI(this.image);
-                    
-                    // Lazy Load Logic for Viewer
-                    // If we are viewing one of the last few images, load more
-                    // Note: this.index is 0-based index in the viewer's list (which matches rendered list)
-                    if (this.index >= renderedCount - 2) {
-                        loadMoreImages(1); // Load 1 more image as requested
+            
+            const layerId = `filter-${filter}`;
+            
+            // 检查层级是否已存在且已渲染（参考 renderFilterViewerLayer 的思路）
+            let layerContainer = document.getElementById(layerId);
+            if (layerContainer && filterLayers[filter] && filterLayers[filter].rendered) {
+                // 验证容器是否真的存在
+                if (filterLayers[filter].container && filterLayers[filter].container.parentNode) {
+                    console.log(`[renderFilterLayer] ${filter}: 已渲染，跳过`);
+                    return;
+                }
+            }
+            
+            // 如果容器不存在，创建新的
+            if (!layerContainer) {
+                console.log(`[renderFilterLayer] ${filter}: 创建新容器`);
+                layerContainer = document.createElement('div');
+                layerContainer.id = layerId;
+                layerContainer.className = 'filter-layer';
+                layerContainer.style.width = '100%';
+                layerContainer.style.display = 'none';  // 默认隐藏
+                layersContainer.appendChild(layerContainer);
+            } else {
+                // 如果已存在，清空内容重新渲染（数据已变化）
+                console.log(`[renderFilterLayer] ${filter}: 使用现有容器，清空内容重新渲染`);
+                layerContainer.innerHTML = '';
+            }
+            
+            // 如果该标签已有实例，先清理旧的Masonry和Viewer
+            if (filterLayers[filter]) {
+                try {
+                    if (filterLayers[filter].masonry) {
+                        filterLayers[filter].masonry.destroy();
+                        filterLayers[filter].masonry = null;
                     }
-                },
+                    if (filterLayers[filter].viewer) {
+                        filterLayers[filter].viewer.destroy();
+                        filterLayers[filter].viewer = null;
+                    }
+                } catch (e) {
+                    console.warn(`[renderFilterLayer] ${filter}: 清理旧实例失败:`, e);
+                }
+            }
+            
+            // 初始化状态对象（如果不存在）
+            if (!filterLayers[filter]) {
+                filterLayers[filter] = {
+                    container: layerContainer,
+                    grid: null,
+                    masonry: null,
+                    viewer: null,
+                    renderedCount: 0,
+                    items: [],
+                    scrollTop: 0,
+                    rendered: false,
+                    _loadingMore: false,
+                    _loadAttempts: 0
+                };
+            } else {
+                filterLayers[filter].container = layerContainer;
+                filterLayers[filter].rendered = false;  // 重置渲染状态
+                filterLayers[filter]._loadingMore = false;  // 重置加载状态
+                filterLayers[filter]._loadAttempts = 0;  // 重置重试次数
+            }
+            
+            // 过滤和排序（针对当前标签）
+            console.log(`[renderFilterLayer] ${filter}: 开始过滤，allImages.length = ${allImages.length}`);
+            let filteredImages = filterImages(allImages, filter);
+            console.log(`[renderFilterLayer] ${filter}: 过滤后数量 = ${filteredImages.length}`);
+            filteredImages = sortImages(filteredImages);
+            
+            // 清空容器内容（确保重新渲染时是干净的）
+            layerContainer.innerHTML = '';
+            
+            // 创建网格容器
+            const grid = document.createElement('div');
+            grid.className = 'image-grid';
+            grid.id = `${layerId}-grid`;
+            
+            if (filteredImages.length === 0) {
+                console.log(`[renderFilterLayer] ${filter}: 没有图片，显示空状态`);
+                grid.innerHTML = `
+                    <div class="no-images">
+                        <i class="fas fa-image" style="font-size: 48px; margin-bottom: 20px; opacity: 0.3;"></i>
+                        <p>没有找到图片</p>
+                    </div>
+                `;
+                layerContainer.appendChild(grid);
+                
+                // 保存空状态
+                filterLayers[filter].grid = grid;
+                filterLayers[filter].items = filteredImages;
+                filterLayers[filter].renderedCount = 0;
+                filterLayers[filter].rendered = true;
+                filterRenderedCounts[filter] = 0;
+                console.log(`[renderFilterLayer] ${filter}: 空状态渲染完成`);
+                return;
+            }
+            
+            // 渐进式渲染：初始只渲染少量内容
+            const initialCount = Math.min(INITIAL_SIZE, filteredImages.length);
+            const initialBatch = filteredImages.slice(0, initialCount);
+            console.log(`[renderFilterLayer] ${filter}: 初始渲染 ${initialCount} 个图片`);
+            
+            grid.innerHTML = initialBatch.map(img => createImageHTML(img)).join('');
+            layerContainer.appendChild(grid);
+            
+            // 立即更新 grid 引用（这样即使异步初始化还没完成，容器也是可用的）
+            filterLayers[filter].grid = grid;
+            filterLayers[filter].items = filteredImages;
+            filterLayers[filter].renderedCount = initialCount;
+            filterRenderedCounts[filter] = initialCount;
+            console.log(`[renderFilterLayer] ${filter}: DOM 创建完成，grid.id = ${grid.id}, 状态已保存`);
+            
+            // 使用 requestAnimationFrame 立即初始化 Masonry（参考 renderFilterViewerLayer 的思路）
+            requestAnimationFrame(() => {
+                console.log(`[renderFilterLayer] ${filter}: 开始初始化 Masonry`);
+                
+                // 检查 grid 是否还在 DOM 中
+                if (!grid.parentNode) {
+                    console.warn(`[renderFilterLayer] ${filter}: grid 不在 DOM 中，跳过 Masonry 初始化`);
+                    return;
+                }
+                
+                try {
+                    // 初始化 Masonry（参考 renderFilterViewerLayer 的简洁方式）
+                    console.log(`[renderFilterLayer] ${filter}: 创建新的 Masonry 实例`);
+                    const layerMasonry = new Masonry(grid, {
+                        itemSelector: '.image-item',
+                        percentPosition: true,
+                        transitionDuration: '0.2s'
+                    });
+                    
+                    // 立即执行一次布局
+                    layerMasonry.layout();
+                    console.log(`[renderFilterLayer] ${filter}: Masonry 初始化成功`);
+                    
+                    // 监听图片加载进度
+                    imagesLoaded(grid).on('progress', function () { 
+                        if (layerMasonry) {
+                            requestAnimationFrame(() => {
+                                layerMasonry.layout();
+                            });
+                        }
+                    });
+                    
+                    // 所有图片加载完成后，确保布局正确
+                    imagesLoaded(grid).on('always', function() {
+                        if (layerMasonry) {
+                            requestAnimationFrame(() => {
+                                layerMasonry.layout();
+                            });
+                        }
+                    });
+                    
+                    // 更新 Masonry 引用
+                    if (filterLayers[filter]) {
+                        filterLayers[filter].masonry = layerMasonry;
+                        console.log(`[renderFilterLayer] ${filter}: Masonry 引用已更新`);
+                    }
+                } catch (e) {
+                    console.error(`[renderFilterLayer] ${filter}: 初始化Masonry失败:`, e);
+                }
+                
+                // 初始化 Viewer.js（延迟到下一帧，避免阻塞）
+                requestAnimationFrame(() => {
+                    console.log(`[renderFilterLayer] ${filter}: 开始初始化 Viewer`);
+                    
+                    // 检查 grid 是否还在 DOM 中
+                    if (!grid.parentNode) {
+                        console.warn(`[renderFilterLayer] ${filter}: Viewer 初始化时 grid 不在 DOM 中，跳过`);
+                        return;
+                    }
+                    
+                    try {
+                        console.log(`[renderFilterLayer] ${filter}: 创建新的 Viewer 实例`);
+                        const layerViewer = new Viewer(grid, {
+                            url: 'data-original',
+                            toolbar: {
+                                zoomIn: 1,
+                                zoomOut: 1,
+                                oneToOne: 1,
+                                reset: 1,
+                                prev: 1,
+                                play: 1,
+                                next: 1,
+                                rotateLeft: 1,
+                                rotateRight: 1,
+                                flipHorizontal: 1,
+                                flipVertical: 1,
+                            },
+                            title: function (image) {
+                                try {
+                                    return image.alt + ' (' + (this.index + 1) + '/' + this.length + ')';
+                                } catch (e) {
+                                    return '';
+                                }
+                            },
+                            viewed() {
+                                try {
+                                    updateViewerCustomUI(this.image);
+                                    
+                                    // Lazy Load Logic for Viewer（添加防抖，防止无限循环）
+                                    const layer = filterLayers[filter];
+                                    if (layer && layer.renderedCount < layer.items.length) {
+                                        // 只有当接近末尾时才加载更多
+                                        if (this.index >= layer.renderedCount - 3) {
+                                            // 使用 setTimeout 防抖，并添加最大重试次数
+                                            if (!layer._loadingMore && (!layer._loadAttempts || layer._loadAttempts < 3)) {
+                                                layer._loadingMore = true;
+                                                layer._loadAttempts = (layer._loadAttempts || 0) + 1;
+                                                setTimeout(() => {
+                                                    try {
+                                                        loadMoreImagesForFilter(filter, 1);
+                                                    } catch (e) {
+                                                        console.error('懒加载失败:', e);
+                                                    }
+                                                    layer._loadingMore = false;
+                                                }, 200);  // 增加防抖时间到200ms
+                                            }
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.error('Viewer viewed回调错误:', e);
+                                }
+                            },
+                            // 添加错误处理
+                            error: function(image) {
+                                console.warn('图片加载失败:', image.src);
+                            }
+                        });
+                        
+                        // 更新状态，包含Viewer
+                        if (filterLayers[filter]) {
+                            filterLayers[filter].viewer = layerViewer;
+                            filterLayers[filter].rendered = true;
+                            console.log(`[renderFilterLayer] ${filter}: Viewer 初始化成功，渲染完成`);
+                        }
+                    } catch (error) {
+                        console.error(`[renderFilterLayer] ${filter}: 初始化Viewer失败:`, error);
+                        // 即使Viewer初始化失败，也标记为已渲染
+                        if (filterLayers[filter]) {
+                            filterLayers[filter].rendered = true;
+                            console.log(`[renderFilterLayer] ${filter}: Viewer 初始化失败，但标记为已渲染`);
+                        }
+                    }
+                });
             });
-
-            // 图片加载完成后重新布局
-            imagesLoaded(grid).on('progress', function() {
-                msnry.layout();
+            
+            console.log(`[renderFilterLayer] ${filter}: 函数执行完成`);
+        }
+        
+        // 显示指定标签的容器（参考审美模式的思路：只显示/隐藏，不重新渲染）
+        function showFilterLayer(filter) {
+            console.log(`[showFilterLayer] 开始显示标签: ${filter}`);
+            
+            // 隐藏所有标签容器（参考 filterViewerGoBack 的思路）
+            Object.keys(filterLayers).forEach(key => {
+                if (filterLayers[key] && filterLayers[key].container) {
+                    filterLayers[key].container.style.display = 'none';
+                    console.log(`[showFilterLayer] 隐藏标签: ${key}`);
+                }
             });
+            
+            // 显示当前标签容器
+            const layer = filterLayers[filter];
+            if (layer && layer.container) {
+                layer.container.style.display = 'block';
+                console.log(`[showFilterLayer] ${filter}: 容器已显示`);
+                
+                // 如果批量模式开启，确保复选框正确显示
+                if (batchMode) {
+                    updateBatchModeDisplay();
+                }
+                
+                // 如果 Masonry 已初始化，执行一次布局
+                if (layer.masonry) {
+                    requestAnimationFrame(() => {
+                        layer.masonry.layout();
+                        console.log(`[showFilterLayer] ${filter}: Masonry 布局已更新`);
+                    });
+                }
+                
+                // 恢复滚动位置（参考 filterViewerGoBack 的思路）
+                const scrollContainer = document.getElementById('main-scroll-container');
+                if (scrollContainer && layer.scrollTop !== undefined && layer.scrollTop !== null) {
+                    // 等待DOM更新和Masonry布局完成
+                    setTimeout(() => {
+                        scrollContainer.scrollTop = layer.scrollTop || 0;
+                        console.log(`[showFilterLayer] ${filter}: 恢复滚动位置 ${layer.scrollTop}`);
+                        // 如果Masonry还在布局，再等待一下
+                        if (layer.masonry) {
+                            layer.masonry.layout();
+                            setTimeout(() => {
+                                scrollContainer.scrollTop = layer.scrollTop || 0;
+                            }, 100);
+                        }
+                    }, 100);
+                }
+            } else {
+                console.warn(`[showFilterLayer] ${filter}: 容器不存在`);
+            }
         }
 
         // Helper to create HTML string for an image
         function createImageHTML(img) {
+            const isSelected = selectedImages.has(img.name);
+            const batchCheckbox = batchMode ? `
+                <div class="batch-checkbox" style="position:absolute; top:10px; left:10px; z-index:10;">
+                    <input type="checkbox" class="image-checkbox" data-filename="${img.name.replace(/"/g, '&quot;')}" 
+                           ${isSelected ? 'checked' : ''} 
+                           onchange="toggleImageSelection('${img.name.replace(/'/g, "\\'")}')" 
+                           onclick="event.stopPropagation();">
+                </div>
+            ` : '';
+            
             return `
                 <div class="image-item">
-                    <div class="image-card fade-in ${markedImages.has(img.name) ? 'marked' : ''}">
+                    <div class="image-card fade-in ${markedImages.has(img.name) ? 'marked' : ''} ${isSelected ? 'selected' : ''}" 
+                         ${batchMode ? `onclick="toggleImageSelection('${img.name.replace(/'/g, "\\'")}')" style="cursor:pointer;"` : ''}>
+                        ${batchCheckbox}
                         ${markedImages.has(img.name) ? 
                             '<div class="mark-icon"><i class="fas fa-star"></i></div>' : ''}
                         <img class="image-thumbnail" 
@@ -1206,7 +1729,7 @@
                                 <span>${formatFileSize(img.size)}</span>
                             </div>
                         </div>
-                        <div class="image-actions">
+                        <div class="image-actions" ${batchMode ? 'style="display:none;"' : ''}>
                             <button class="action-btn preview-btn" onclick="event.stopPropagation(); previewImage('${img.path.replace(/'/g, "\\'")}')">
                                 <i class="fas fa-expand"></i>
                             </button>
@@ -1222,14 +1745,20 @@
             `;
         }
 
-        // Load more images (Lazy Loading)
-        function loadMoreImages(count) {
-            if (renderedCount >= processedImages.length) return;
+        // Load more images for specific filter (Lazy Loading)
+        // 为指定标签懒加载更多图片（渐进式，确保内容在屏幕下方）
+        function loadMoreImagesForFilter(filter, count) {
+            const layer = filterLayers[filter];
+            if (!layer || layer.renderedCount >= layer.items.length) return;
 
-            const nextBatch = processedImages.slice(renderedCount, renderedCount + count);
+            const nextBatch = layer.items.slice(layer.renderedCount, layer.renderedCount + count);
             if (nextBatch.length === 0) return;
 
-            const grid = document.getElementById('image-grid');
+            const grid = layer.grid;
+            const scrollContainer = document.getElementById('main-scroll-container');
+            
+            // 记录当前滚动位置（确保新内容在屏幕下方）
+            const currentScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
             
             // Create temporary container to parse HTML
             const tempDiv = document.createElement('div');
@@ -1237,29 +1766,75 @@
             
             const newElements = Array.from(tempDiv.children);
             
-            // Append to grid
-            newElements.forEach(el => grid.appendChild(el));
-            
-            // Update Masonry
-            msnry.appended(newElements);
-            
-            // Update Viewer
-            if (window.galleryViewer) {
-                window.galleryViewer.update();
-            }
-            
-            // Wait for images to load then layout
-            imagesLoaded(newElements).on('progress', function() {
-                msnry.layout();
-            });
+            // 使用 requestAnimationFrame 优化性能
+            requestAnimationFrame(() => {
+                // Append to grid
+                newElements.forEach(el => grid.appendChild(el));
+                
+                // 如果批量模式开启，确保新添加的元素也显示复选框
+                if (batchMode) {
+                    newElements.forEach(item => {
+                        const card = item.querySelector('.image-card');
+                        const checkbox = item.querySelector('.batch-checkbox');
+                        const actions = item.querySelector('.image-actions');
+                        
+                        if (checkbox) checkbox.style.display = 'block';
+                        if (actions) actions.style.display = 'none';
+                        if (card) {
+                            card.style.cursor = 'pointer';
+                            const filename = item.querySelector('.image-name')?.textContent;
+                            if (filename) {
+                                card.onclick = () => toggleImageSelection(filename);
+                            }
+                        }
+                    });
+                }
+                
+                // Update Masonry
+                if (layer.masonry) {
+                    layer.masonry.appended(newElements);
+                    // 立即布局，确保内容在下方
+                    layer.masonry.layout();
+                }
+                
+                // 确保滚动位置不变（新内容在下方，不会影响当前视图）
+                if (scrollContainer && currentScrollTop > 0) {
+                    scrollContainer.scrollTop = currentScrollTop;
+                }
+                
+                // Update Viewer（延迟到下一帧）
+                requestAnimationFrame(() => {
+                    if (layer.viewer) {
+                        layer.viewer.update();
+                    }
+                    
+                    // Wait for images to load then layout
+                    imagesLoaded(newElements).on('progress', function() {
+                        if (layer.masonry) {
+                            requestAnimationFrame(() => {
+                                layer.masonry.layout();
+                            });
+                        }
+                    });
+                });
 
-            renderedCount += nextBatch.length;
+                layer.renderedCount += newElements.length;
+                filterRenderedCounts[filter] = layer.renderedCount;
+            });
         }
         
-        // 过滤图片
-        function filterImages(images) {
+        // 兼容旧代码：Load more images (Lazy Loading)
+        // 常规模式懒加载（渐进式，确保内容在屏幕下方）
+        function loadMoreImages(count) {
+            // 使用当前标签的懒加载函数
+            loadMoreImagesForFilter(currentFilter, count);
+        }
+        
+        // 过滤图片（支持指定filter参数）
+        function filterImages(images, filter = null) {
+            const filterToUse = filter !== null ? filter : currentFilter;
             let result = [];
-            switch(currentFilter) {
+            switch(filterToUse) {
                 case 'jpg':
                     result = images.filter(img => img.type === 'JPG');
                     break;
@@ -1324,8 +1899,17 @@
             }
         }
         
-        // 设置过滤器
+        // 设置过滤器（参考审美模式的 openFilterViewer 思路：保存滚动位置，切换显示）
         function setFilter(filter) {
+            console.log(`[setFilter] 切换标签: ${currentFilter} -> ${filter}`);
+            
+            // 保存当前标签的滚动位置（参考 openFilterViewer 保存滚动位置的思路）
+            const scrollContainer = document.getElementById('main-scroll-container');
+            if (scrollContainer && filterLayers[currentFilter]) {
+                filterLayers[currentFilter].scrollTop = scrollContainer.scrollTop;
+                console.log(`[setFilter] 保存 ${currentFilter} 的滚动位置: ${scrollContainer.scrollTop}`);
+            }
+            
             currentFilter = filter;
             
             // 更新活动状态
@@ -1334,10 +1918,26 @@
             });
             event.target.closest('.filter-pill').classList.add('active');
             
-            renderImages();
+            // 如果该标签还未渲染，先渲染（参考 openFilterViewer 的思路：只在需要时渲染）
+            const needsRender = !filterLayers[filter] || !filterLayers[filter].rendered || 
+                               !filterLayers[filter].container || !filterLayers[filter].container.parentNode;
+            console.log(`[setFilter] ${filter}: 是否需要渲染 = ${needsRender}`, {
+                layerExists: !!filterLayers[filter],
+                rendered: !!(filterLayers[filter] && filterLayers[filter].rendered),
+                hasContainer: !!(filterLayers[filter] && filterLayers[filter].container),
+                containerInDOM: !!(filterLayers[filter] && filterLayers[filter].container && filterLayers[filter].container.parentNode)
+            });
+            
+            if (needsRender) {
+                console.log(`[setFilter] ${filter}: 开始渲染`);
+                renderFilterLayer(filter);
+            }
+            
+            // 切换到目标标签（参考 openFilterViewer 的思路：只显示/隐藏，不重新渲染）
+            showFilterLayer(filter);
         }
         
-        // 设置排序
+        // 设置排序（重新渲染所有标签）
         function setSort(sort) {
             currentSort = sort;
             
@@ -1347,6 +1947,14 @@
             });
             event.target.closest('.filter-pill').classList.add('active');
             
+            // 清除所有标签的渲染状态，强制重新渲染
+            Object.keys(filterLayers).forEach(filter => {
+                if (filterLayers[filter]) {
+                    filterLayers[filter].rendered = false;
+                }
+            });
+            
+            // 重新渲染所有标签
             renderImages();
         }
         
@@ -1359,22 +1967,126 @@
             }
         }
 
-        // 切换 RAW 显示
-        function toggleRawVisibility() {
-            showRaw = document.getElementById('show-raw-toggle').checked;
+        // 切换 RAW 显示（优化：先判断是否有RAW文件，再决定是否需要重新渲染）
+        async function toggleRawVisibility() {
+            const newShowRaw = document.getElementById('show-raw-toggle').checked;
+            
+            // 如果状态没有变化，直接返回
+            if (newShowRaw === showRaw) {
+                return;
+            }
+            
+            showRaw = newShowRaw;
             localStorage.setItem('show_raw', showRaw);
             
             const rawPill = document.getElementById('raw-filter-pill');
+            const wasOnRawFilter = currentFilter === 'raw';
+            
             if (showRaw) {
                 rawPill.style.display = 'flex';
             } else {
                 rawPill.style.display = 'none';
-                if (currentFilter === 'raw') {
-                    setFilter('all');
-                }
             }
-            // 重新加载图片以获取 RAW 文件
-            loadImages();
+            
+            // 先重新加载图片数据，判断是否有RAW文件需要渲染
+            try {
+                console.log('[toggleRawVisibility] 重新加载图片数据，判断是否需要渲染');
+                const response = await fetch(`/api/images?folder=${encodeURIComponent(currentPath)}&show_raw=${showRaw}`);
+                allImages = await response.json();
+                updateStats();
+                
+                // 判断是否有RAW文件
+                const hasRawFiles = allImages.some(img => img.type === 'RAW');
+                console.log(`[toggleRawVisibility] 是否有RAW文件: ${hasRawFiles}`);
+                
+                // 如果关闭了 RAW 显示且当前在 RAW 标签，切换到 'all' 标签
+                if (!showRaw && wasOnRawFilter) {
+                    console.log('[toggleRawVisibility] 关闭RAW显示，切换到全部标签');
+                    setFilter('all');
+                    return;  // setFilter 会处理渲染
+                }
+                
+                // 判断哪些标签需要重新渲染
+                const needsRender = {
+                    'all': false,
+                    'raw': false,
+                    'marked': false
+                };
+                
+                // 'all' 标签：RAW显示状态会影响过滤逻辑（是否显示RAW文件）
+                // 只有当RAW显示状态改变且数据中有RAW文件时，才需要重新渲染
+                if (hasRawFiles) {
+                    needsRender['all'] = true;
+                    console.log('[toggleRawVisibility] 全部标签需要重新渲染（有RAW文件）');
+                } else {
+                    console.log('[toggleRawVisibility] 全部标签不需要重新渲染（无RAW文件）');
+                }
+                
+                // 'raw' 标签：只有当开启RAW显示且有RAW文件时，才需要渲染
+                if (showRaw && hasRawFiles) {
+                    needsRender['raw'] = true;
+                    console.log('[toggleRawVisibility] RAW标签需要重新渲染（开启RAW显示且有RAW文件）');
+                } else {
+                    console.log('[toggleRawVisibility] RAW标签不需要重新渲染');
+                }
+                
+                // 'marked' 标签：检查已标记的图片中是否有RAW文件
+                if (hasRawFiles) {
+                    const markedHasRaw = allImages.some(img => 
+                        markedImages.has(img.name) && img.type === 'RAW'
+                    );
+                    if (markedHasRaw) {
+                        needsRender['marked'] = true;
+                        console.log('[toggleRawVisibility] 已标记标签需要重新渲染（已标记中有RAW文件）');
+                    } else {
+                        console.log('[toggleRawVisibility] 已标记标签不需要重新渲染（已标记中无RAW文件）');
+                    }
+                } else {
+                    console.log('[toggleRawVisibility] 已标记标签不需要重新渲染（无RAW文件）');
+                }
+                
+                // 根据判断结果，标记需要重新渲染的标签（加入渲染队列）
+                if (needsRender['all'] && filterLayers['all']) {
+                    filterLayers['all'].rendered = false;
+                    console.log('[toggleRawVisibility] 标记全部标签需要重新渲染（加入渲染队列）');
+                }
+                
+                if (needsRender['raw'] && filterLayers['raw']) {
+                    filterLayers['raw'].rendered = false;
+                    console.log('[toggleRawVisibility] 标记RAW标签需要重新渲染（加入渲染队列）');
+                }
+                
+                if (needsRender['marked'] && filterLayers['marked']) {
+                    filterLayers['marked'].rendered = false;
+                    console.log('[toggleRawVisibility] 标记已标记标签需要重新渲染（加入渲染队列）');
+                }
+                
+                // 如果当前在受影响的标签，立即重新渲染
+                if (currentFilter === 'all' && needsRender['all']) {
+                    console.log('[toggleRawVisibility] 当前在全部标签，立即重新渲染');
+                    renderFilterLayer('all');
+                    showFilterLayer('all');
+                }
+                else if (currentFilter === 'raw' && needsRender['raw']) {
+                    console.log('[toggleRawVisibility] 当前在RAW标签，立即重新渲染');
+                    renderFilterLayer('raw');
+                    showFilterLayer('raw');
+                }
+                else if (currentFilter === 'marked' && needsRender['marked']) {
+                    console.log('[toggleRawVisibility] 当前在已标记标签，立即重新渲染');
+                    renderFilterLayer('marked');
+                    showFilterLayer('marked');
+                }
+                else {
+                    console.log('[toggleRawVisibility] 当前标签不受影响或不需要重新渲染，保持原样');
+                }
+                
+                // JPG 标签不受 RAW 显示影响，保持原样（不重置 rendered 状态）
+                console.log('[toggleRawVisibility] 完成，JPG标签保持不变');
+            } catch (error) {
+                console.error('[toggleRawVisibility] 加载图片失败:', error);
+                showNotification('加载图片失败', 'error');
+            }
         }
 
         // 打开对比视图
@@ -1579,7 +2291,33 @@
                     }
                     
                     updateStats();
-                    // renderImages(); // Don't re-render entire grid to keep viewer open
+                    
+                    // 重新渲染已标记标签（不影响当前视图）
+                    if (filterLayers['marked']) {
+                        filterLayers['marked'].rendered = false;
+                        renderFilterLayer('marked');
+                    }
+                    
+                    // 更新当前标签中该图片的显示（如果当前在显示该图片）
+                    const layer = filterLayers[currentFilter];
+                    if (layer && layer.grid) {
+                        const card = Array.from(layer.grid.querySelectorAll('.image-name')).find(el => el.textContent === filename)?.closest('.image-card');
+                        if (card) {
+                            if (markedImages.has(filename)) {
+                                card.classList.add('marked');
+                                if (!card.querySelector('.mark-icon')) {
+                                    const icon = document.createElement('div');
+                                    icon.className = 'mark-icon';
+                                    icon.innerHTML = '<i class="fas fa-star"></i>';
+                                    card.insertBefore(icon, card.firstChild);
+                                }
+                            } else {
+                                card.classList.remove('marked');
+                                const icon = card.querySelector('.mark-icon');
+                                if (icon) icon.remove();
+                            }
+                        }
+                    }
                     
                     showNotification(`${action}成功 (${result.count}个文件)`, 'success');
                 }
@@ -1594,7 +2332,7 @@
             deleteImage(filename, false);
         }
         
-        // 删除图片
+        // 删除图片（优化：不重新渲染所有标签，只更新受影响的标签）
         async function deleteImage(filename, permanent = false) {
             try {
                 const response = await fetch('/api/delete', {
@@ -1612,8 +2350,84 @@
                 if (result.success) {
                     showNotification(`${permanent ? '永久删除' : '删除'}成功 (${result.count}个文件)`, 'success');
                     
-                    // 重新加载图片和回收站信息
-                    loadImages();
+                    // 只更新数据，不重新渲染所有标签
+                    try {
+                        console.log('[deleteImage] 更新图片数据（不重新渲染所有标签）');
+                        const dataResponse = await fetch(`/api/images?folder=${encodeURIComponent(currentPath)}&show_raw=${showRaw}`);
+                        allImages = await dataResponse.json();
+                        updateStats();
+                        
+                        // 从已标记列表中移除（如果被标记）
+                        if (markedImages.has(filename)) {
+                            markedImages.delete(filename);
+                            updateStats();
+                        }
+                        
+                        // 只更新当前标签（从DOM中移除对应的图片元素）
+                        const currentLayer = filterLayers[currentFilter];
+                        if (currentLayer && currentLayer.grid) {
+                            // 获取删除前的图片列表（用于对比）
+                            const oldFilteredImages = currentLayer.items || [];
+                            
+                            // 更新当前标签的数据
+                            const newFilteredImages = filterImages(allImages, currentFilter);
+                            currentLayer.items = newFilteredImages;
+                            
+                            // 找出被删除的图片（在旧列表中但不在新列表中）
+                            const oldImageNames = new Set(oldFilteredImages.map(img => img.name));
+                            const newImageNames = new Set(newFilteredImages.map(img => img.name));
+                            const deletedImageNames = [...oldImageNames].filter(name => !newImageNames.has(name));
+                            
+                            // 查找并移除对应的图片元素
+                            const imageItems = currentLayer.grid.querySelectorAll('.image-item');
+                            const removedElements = [];
+                            imageItems.forEach(item => {
+                                const imageName = item.querySelector('.image-name');
+                                if (imageName && deletedImageNames.includes(imageName.textContent)) {
+                                    removedElements.push(item);
+                                    console.log(`[deleteImage] 从${currentFilter}标签中移除图片: ${imageName.textContent}`);
+                                }
+                            });
+                            
+                            // 移除元素
+                            if (removedElements.length > 0) {
+                                removedElements.forEach(el => el.remove());
+                                
+                                // 更新Masonry布局
+                                if (currentLayer.masonry) {
+                                    currentLayer.masonry.layout();
+                                }
+                                
+                                // 更新Viewer
+                                if (currentLayer.viewer) {
+                                    currentLayer.viewer.update();
+                                }
+                                
+                                // 更新已渲染数量（减去删除的数量）
+                                currentLayer.renderedCount = Math.max(0, currentLayer.renderedCount - removedElements.length);
+                                
+                                console.log(`[deleteImage] 从${currentFilter}标签中移除了${removedElements.length}个图片元素`);
+                            } else {
+                                // 如果没有找到要删除的元素，说明图片不在当前标签中，只需要更新数据
+                                console.log(`[deleteImage] 删除的图片不在${currentFilter}标签中，只更新数据`);
+                            }
+                        }
+                        
+                        // 标记所有标签需要重新渲染（但不立即渲染，等用户切换到该标签时再渲染）
+                        Object.keys(filterLayers).forEach(filter => {
+                            if (filterLayers[filter] && filter !== currentFilter) {
+                                filterLayers[filter].rendered = false;
+                                console.log(`[deleteImage] 标记${filter}标签需要重新渲染（加入渲染队列）`);
+                            }
+                        });
+                        
+                        console.log('[deleteImage] 完成，只更新了当前标签');
+                    } catch (error) {
+                        console.error('[deleteImage] 更新数据失败:', error);
+                        // 如果更新失败，回退到重新加载所有图片
+                        loadImages();
+                    }
+                    
                     loadTrashInfo();
                     closePreview();
                 }
@@ -1740,6 +2554,7 @@
         }
         
         // 恢复图片
+        // 恢复图片（优化：不重新渲染所有标签，只更新受影响的标签）
         async function restoreImage(filename) {
             try {
                 const response = await fetch('/api/restore', {
@@ -1755,7 +2570,41 @@
                 
                 if (result.success) {
                     showNotification('恢复成功', 'success');
-                    loadImages();
+                    
+                    // 只更新数据，不重新渲染所有标签
+                    try {
+                        console.log('[restoreImage] 更新图片数据（不重新渲染所有标签）');
+                        const dataResponse = await fetch(`/api/images?folder=${encodeURIComponent(currentPath)}&show_raw=${showRaw}`);
+                        allImages = await dataResponse.json();
+                        updateStats();
+                        
+                        // 只更新当前标签（需要重新渲染以显示恢复的图片）
+                        const currentLayer = filterLayers[currentFilter];
+                        if (currentLayer) {
+                            // 标记当前标签需要重新渲染
+                            currentLayer.rendered = false;
+                            console.log(`[restoreImage] 标记${currentFilter}标签需要重新渲染`);
+                            
+                            // 立即重新渲染当前标签
+                            renderFilterLayer(currentFilter);
+                            showFilterLayer(currentFilter);
+                        }
+                        
+                        // 标记其他标签需要重新渲染（但不立即渲染，等用户切换到该标签时再渲染）
+                        Object.keys(filterLayers).forEach(filter => {
+                            if (filterLayers[filter] && filter !== currentFilter) {
+                                filterLayers[filter].rendered = false;
+                                console.log(`[restoreImage] 标记${filter}标签需要重新渲染（加入渲染队列）`);
+                            }
+                        });
+                        
+                        console.log('[restoreImage] 完成，只更新了当前标签');
+                    } catch (error) {
+                        console.error('[restoreImage] 更新数据失败:', error);
+                        // 如果更新失败，回退到重新加载所有图片
+                        loadImages();
+                    }
+                    
                     loadTrashInfo();
                 } else {
                     showNotification(result.message, 'error');
@@ -1787,6 +2636,382 @@
         // 下载图片
         function downloadImage(path) {
             window.open(`/api/original/${encodeURIComponent(path)}`, '_blank');
+        }
+        
+        // ========== 批量处理功能 ==========
+        
+        // 切换批量模式
+        function toggleBatchMode() {
+            batchMode = !batchMode;
+            const batchToolbar = document.getElementById('batch-toolbar');
+            const batchBtn = document.getElementById('batch-mode-btn');
+            
+            if (batchMode) {
+                // 开启批量模式
+                batchToolbar.style.display = 'block';
+                batchBtn.classList.add('active');
+                batchBtn.innerHTML = '<i class="fas fa-check-square"></i> 批量中';
+                console.log('[toggleBatchMode] 开启批量模式');
+            } else {
+                // 关闭批量模式
+                batchToolbar.style.display = 'none';
+                batchBtn.classList.remove('active');
+                batchBtn.innerHTML = '<i class="fas fa-check-square"></i> 批量';
+                clearSelection();  // 清除选择
+                console.log('[toggleBatchMode] 关闭批量模式');
+            }
+            
+            // 更新所有标签的显示（显示/隐藏复选框）
+            updateBatchModeDisplay();
+        }
+        
+        // 更新批量模式显示（为所有标签添加/移除复选框）
+        function updateBatchModeDisplay() {
+            Object.keys(filterLayers).forEach(filter => {
+                const layer = filterLayers[filter];
+                if (layer && layer.grid) {
+                    const imageItems = layer.grid.querySelectorAll('.image-item');
+                    imageItems.forEach(item => {
+                        const card = item.querySelector('.image-card');
+                        const checkbox = item.querySelector('.batch-checkbox');
+                        const actions = item.querySelector('.image-actions');
+                        
+                        if (batchMode) {
+                            // 显示复选框，隐藏操作按钮
+                            if (!checkbox) {
+                                // 如果还没有复选框，需要重新渲染（这种情况不应该发生，但为了安全）
+                                const imageName = item.querySelector('.image-name');
+                                if (imageName) {
+                                    const filename = imageName.textContent;
+                                    const img = allImages.find(i => i.name === filename);
+                                    if (img) {
+                                        const isSelected = selectedImages.has(filename);
+                                        const checkboxHtml = `
+                                            <div class="batch-checkbox" style="position:absolute; top:10px; left:10px; z-index:10;">
+                                                <input type="checkbox" class="image-checkbox" data-filename="${filename.replace(/"/g, '&quot;')}" 
+                                                       ${isSelected ? 'checked' : ''} 
+                                                       onchange="toggleImageSelection('${filename.replace(/'/g, "\\'")}')" 
+                                                       onclick="event.stopPropagation();">
+                                            </div>
+                                        `;
+                                        card.insertAdjacentHTML('afterbegin', checkboxHtml);
+                                    }
+                                }
+                            } else {
+                                checkbox.style.display = 'block';
+                            }
+                            if (actions) actions.style.display = 'none';
+                            if (card) {
+                                card.style.cursor = 'pointer';
+                                const filename = item.querySelector('.image-name')?.textContent;
+                                if (filename) {
+                                    card.onclick = () => toggleImageSelection(filename);
+                                }
+                            }
+                        } else {
+                            // 隐藏复选框，显示操作按钮
+                            if (checkbox) checkbox.style.display = 'none';
+                            if (actions) actions.style.display = 'flex';
+                            if (card) {
+                                card.style.cursor = '';
+                                card.onclick = null;
+                            }
+                        }
+                    });
+                }
+            });
+        }
+        
+        // 切换单个图片的选择状态
+        function toggleImageSelection(filename) {
+            if (!batchMode) return;
+            
+            if (selectedImages.has(filename)) {
+                selectedImages.delete(filename);
+            } else {
+                selectedImages.add(filename);
+            }
+            
+            // 更新UI
+            updateImageSelectionUI(filename);
+            updateBatchCount();
+        }
+        
+        // 更新单个图片的选择UI
+        function updateImageSelectionUI(filename) {
+            Object.keys(filterLayers).forEach(filter => {
+                const layer = filterLayers[filter];
+                if (layer && layer.grid) {
+                    const imageItems = layer.grid.querySelectorAll('.image-item');
+                    imageItems.forEach(item => {
+                        const imageName = item.querySelector('.image-name');
+                        if (imageName && imageName.textContent === filename) {
+                            const card = item.querySelector('.image-card');
+                            const checkbox = item.querySelector('.image-checkbox');
+                            const isSelected = selectedImages.has(filename);
+                            
+                            if (checkbox) {
+                                checkbox.checked = isSelected;
+                            }
+                            if (card) {
+                                if (isSelected) {
+                                    card.classList.add('selected');
+                                } else {
+                                    card.classList.remove('selected');
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+        }
+        
+        // 全选当前标签的图片
+        function selectAllImages() {
+            if (!batchMode) return;
+            
+            const layer = filterLayers[currentFilter];
+            if (!layer || !layer.items) return;
+            
+            // 选择当前标签的所有图片
+            layer.items.forEach(img => {
+                selectedImages.add(img.name);
+            });
+            
+            // 更新UI
+            updateBatchModeDisplay();
+            updateBatchCount();
+            
+            showNotification(`已选择 ${layer.items.length} 个图片`, 'success');
+        }
+        
+        // 清除所有选择
+        function clearSelection() {
+            selectedImages.clear();
+            updateBatchModeDisplay();
+            updateBatchCount();
+        }
+        
+        // 更新批量选择计数
+        function updateBatchCount() {
+            const countEl = document.getElementById('batch-count');
+            if (countEl) {
+                countEl.textContent = `已选择 ${selectedImages.size} 项`;
+            }
+        }
+        
+        // 批量标记
+        async function batchMark() {
+            if (selectedImages.size === 0) {
+                showNotification('请先选择要标记的图片', 'warning');
+                return;
+            }
+            
+            if (!confirm(`确定要标记 ${selectedImages.size} 个图片吗？`)) {
+                return;
+            }
+            
+            try {
+                let successCount = 0;
+                let failCount = 0;
+                
+                // 批量标记
+                for (const filename of selectedImages) {
+                    try {
+                        const isMarked = markedImages.has(filename);
+                        const response = await fetch('/api/mark', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                filename: filename,
+                                folder: currentPath,
+                                mark: !isMarked
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            if (isMarked) {
+                                markedImages.delete(filename);
+                            } else {
+                                markedImages.add(filename);
+                            }
+                            successCount++;
+                        } else {
+                            failCount++;
+                        }
+                    } catch (error) {
+                        console.error(`标记 ${filename} 失败:`, error);
+                        failCount++;
+                    }
+                }
+                
+                // 更新统计
+                updateStats();
+                
+                // 更新当前标签的显示
+                const layer = filterLayers[currentFilter];
+                if (layer && layer.grid) {
+                    const imageItems = layer.grid.querySelectorAll('.image-item');
+                    imageItems.forEach(item => {
+                        const imageName = item.querySelector('.image-name');
+                        if (imageName && selectedImages.has(imageName.textContent)) {
+                            const card = item.querySelector('.image-card');
+                            const markIcon = card.querySelector('.mark-icon');
+                            const markBtn = item.querySelector('.mark-btn');
+                            
+                            const isMarked = markedImages.has(imageName.textContent);
+                            if (isMarked) {
+                                if (!markIcon) {
+                                    const icon = document.createElement('div');
+                                    icon.className = 'mark-icon';
+                                    icon.innerHTML = '<i class="fas fa-star"></i>';
+                                    card.insertBefore(icon, card.firstChild);
+                                }
+                                card.classList.add('marked');
+                                if (markBtn) {
+                                    markBtn.querySelector('i').className = 'fas fa-star';
+                                }
+                            } else {
+                                if (markIcon) markIcon.remove();
+                                card.classList.remove('marked');
+                                if (markBtn) {
+                                    markBtn.querySelector('i').className = 'fa-star-o';
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                // 清除选择
+                clearSelection();
+                
+                // 显示结果
+                if (failCount === 0) {
+                    showNotification(`成功标记 ${successCount} 个图片`, 'success');
+                } else {
+                    showNotification(`标记完成：成功 ${successCount} 个，失败 ${failCount} 个`, 'warning');
+                }
+            } catch (error) {
+                console.error('批量标记失败:', error);
+                showNotification('批量标记失败', 'error');
+            }
+        }
+        
+        // 批量删除
+        async function batchDelete() {
+            if (selectedImages.size === 0) {
+                showNotification('请先选择要删除的图片', 'warning');
+                return;
+            }
+            
+            const permanent = confirm(`确定要删除 ${selectedImages.size} 个图片吗？\n\n点击"确定"永久删除，点击"取消"移动到回收站`);
+            const isPermanent = permanent === true;
+            
+            if (!permanent && !confirm(`确定要将 ${selectedImages.size} 个图片移动到回收站吗？`)) {
+                return;
+            }
+            
+            try {
+                const filenames = Array.from(selectedImages);
+                let successCount = 0;
+                let failCount = 0;
+                
+                // 批量删除
+                for (const filename of filenames) {
+                    try {
+                        const response = await fetch('/api/delete', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                filename: filename,
+                                folder: currentPath,
+                                permanent: isPermanent
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            successCount++;
+                        } else {
+                            failCount++;
+                        }
+                    } catch (error) {
+                        console.error(`删除 ${filename} 失败:`, error);
+                        failCount++;
+                    }
+                }
+                
+                // 更新数据
+                try {
+                    const dataResponse = await fetch(`/api/images?folder=${encodeURIComponent(currentPath)}&show_raw=${showRaw}`);
+                    allImages = await dataResponse.json();
+                    updateStats();
+                    
+                    // 从已标记列表中移除
+                    filenames.forEach(filename => {
+                        if (markedImages.has(filename)) {
+                            markedImages.delete(filename);
+                        }
+                    });
+                    updateStats();
+                    
+                    // 更新当前标签（从DOM中移除对应的图片元素）
+                    const layer = filterLayers[currentFilter];
+                    if (layer && layer.grid) {
+                        const imageItems = layer.grid.querySelectorAll('.image-item');
+                        const removedElements = [];
+                        imageItems.forEach(item => {
+                            const imageName = item.querySelector('.image-name');
+                            if (imageName && selectedImages.has(imageName.textContent)) {
+                                removedElements.push(item);
+                            }
+                        });
+                        
+                        if (removedElements.length > 0) {
+                            removedElements.forEach(el => el.remove());
+                            
+                            if (layer.masonry) {
+                                layer.masonry.layout();
+                            }
+                            if (layer.viewer) {
+                                layer.viewer.update();
+                            }
+                            
+                            // 更新数据
+                            const filteredImages = filterImages(allImages, currentFilter);
+                            layer.items = filteredImages;
+                            layer.renderedCount = Math.max(0, layer.renderedCount - removedElements.length);
+                        }
+                    }
+                    
+                    // 标记其他标签需要重新渲染
+                    Object.keys(filterLayers).forEach(filter => {
+                        if (filterLayers[filter] && filter !== currentFilter) {
+                            filterLayers[filter].rendered = false;
+                        }
+                    });
+                } catch (error) {
+                    console.error('更新数据失败:', error);
+                    loadImages();  // 回退到重新加载
+                }
+                
+                // 清除选择
+                clearSelection();
+                
+                // 更新回收站信息
+                loadTrashInfo();
+                
+                // 显示结果
+                if (failCount === 0) {
+                    showNotification(`成功${isPermanent ? '永久删除' : '删除'} ${successCount} 个图片`, 'success');
+                } else {
+                    showNotification(`${isPermanent ? '永久删除' : '删除'}完成：成功 ${successCount} 个，失败 ${failCount} 个`, 'warning');
+                }
+            } catch (error) {
+                console.error('批量删除失败:', error);
+                showNotification('批量删除失败', 'error');
+            }
         }
         
         // 显示通知
@@ -2032,8 +3257,17 @@
 
         async function enterAestheticMode() {
             aestheticMode = true;
+            aestheticAllItems = [];  // 清空缓存，强制刷新
+            
+            // Pinterest 风格：优先从 URL 恢复筛选状态
+            restoreAestheticFilterFromURL();
+            
+            // 如果 URL 中没有，则重置
+            if (!aestheticAuthor && !aestheticWork) {
             aestheticAuthor = null;
             aestheticWork = null;
+            }
+            
             localStorage.setItem('aesthetic_active', 'true');
             document.getElementById('aesthetic-exit').style.display = 'inline-flex';
             // 隐藏主容器，显示审美容器
@@ -2043,11 +3277,15 @@
             document.getElementById('aesthetic-path-display').textContent = aestheticPath || '未选择目录';
             document.getElementById('aesthetic-count').textContent = '';
             showNotification('已进入审美提升模式', 'info');
-            await reloadAesthetic();
+            await reloadAesthetic(true);  // 强制刷新（会在内部从 URL 恢复状态）
         }
 
         function exitAestheticMode() {
             aestheticMode = false;
+            aestheticAllItems = [];  // 清空缓存
+            aestheticItems = [];
+            aestheticAuthor = null;
+            aestheticWork = null;
             localStorage.setItem('aesthetic_active', 'false');
             document.getElementById('aesthetic-exit').style.display = 'none';
             // 恢复常规模式
@@ -2059,89 +3297,476 @@
             loadImages();
         }
 
-        async function reloadAesthetic() {
+        async function reloadAesthetic(forceRefresh = false) {
             try {
-                const params = new URLSearchParams();
-                if (!aestheticPath) {
                     const grid = document.getElementById('aesthetic-grid');
+                
+                if (!aestheticPath) {
                     grid.innerHTML = `<div class=\"loading\"><div class=\"spinner\"></div><p style=\"margin-top: 15px;\">等待选择目录...</p></div>`;
                     return;
                 }
-                params.set('folder', aestheticPath || '.');
+                
+                // 如果有缓存数据且不强制刷新，直接使用前端筛选
+                if (aestheticAllItems.length > 0 && !forceRefresh) {
+                    applyAestheticFilter();
+                    return;
+                }
+                
+                // 显示加载状态
+                grid.innerHTML = `<div class=\"loading\"><div class=\"spinner\"></div><p style=\"margin-top: 15px;\">正在加载...</p></div>`;
+                
+                const params = new URLSearchParams();
+                params.set('folder', aestheticPath);
                 params.set('shuffle', 'true');
-                if (aestheticAuthor) params.set('author', aestheticAuthor);
-                if (aestheticWork) params.set('work', aestheticWork);
+                // 不传 author/work，获取全部数据
 
                 const res = await fetch(`/api/aesthetic?${params.toString()}`);
                 const data = await res.json();
-                aestheticItems = data.items || [];
+                
+                // 缓存完整数据，并记录原始索引（用于筛选后保持顺序）
+                aestheticAllItems = (data.items || []).map((item, idx) => ({
+                    ...item,
+                    _originalIndex: idx
+                }));
+                aestheticItems = [...aestheticAllItems];
+                
+                // 优先从 URL 恢复筛选状态（Pinterest 风格）
+                const urlRestored = restoreAestheticFilterFromURL();
+                
+                // 如果 URL 中没有参数，尝试从 localStorage 恢复
+                if (!urlRestored) {
+                    try {
+                        const saved = localStorage.getItem(`aesthetic_scroll_${aestheticPath}`);
+                        if (saved) {
+                            const scrollState = JSON.parse(saved);
+                            if (scrollState.author || scrollState.work) {
+                                aestheticAuthor = scrollState.author || null;
+                                aestheticWork = scrollState.work || null;
+                                // 同步到 URL
+                                updateAestheticURL();
+                            }
+                        }
+                    } catch (e) {
+                        console.error('恢复筛选状态失败:', e);
+                    }
+                }
+                
+                // 应用筛选（如果有）
+                if (aestheticAuthor || aestheticWork) {
+                    aestheticItems = aestheticAllItems.filter(item => {
+                        if (aestheticAuthor && item.author !== aestheticAuthor) return false;
+                        if (aestheticWork && item.work !== aestheticWork) return false;
+                        return true;
+                    });
+                    aestheticItems.sort((a, b) => a._originalIndex - b._originalIndex);
+                }
+                
+                // 首次加载，完整渲染
                 renderAestheticItems();
-                document.getElementById('aesthetic-count').textContent = `共 ${data.count || aestheticItems.length} 项`;
-                document.getElementById('aesthetic-clear-filter').style.display = (aestheticAuthor || aestheticWork) ? 'inline-block' : 'none';
-                showNotification(`已加载 ${data.count || aestheticItems.length} 个作品`, 'success');
+                updateAestheticUI();
+                
+                // 恢复滚动位置在 renderAestheticItems 的图片加载完成后执行
+                
+                showNotification(`已加载 ${aestheticAllItems.length} 个作品`, 'success');
             } catch (e) {
                 console.error(e);
                 showNotification('加载审美模式数据失败', 'error');
             }
         }
 
-        function renderAestheticItems() {
+        // 更新审美模式 UI 状态（筛选信息、计数等）
+        function updateAestheticUI() {
+            const hasFilter = aestheticAuthor || aestheticWork;
+            const totalCount = aestheticAllItems.length;
+            const filteredCount = aestheticItems.length;
+            
+            const filterInfoEl = document.getElementById('aesthetic-filter-info');
+            if (hasFilter) {
+                let filterText = '';
+                if (aestheticAuthor && aestheticWork) {
+                    filterText = `${aestheticAuthor} · ${aestheticWork}`;
+                } else if (aestheticAuthor) {
+                    filterText = `作者: ${aestheticAuthor}`;
+                } else if (aestheticWork) {
+                    filterText = `作品: ${aestheticWork}`;
+                }
+                filterInfoEl.textContent = filterText;
+                filterInfoEl.style.display = 'inline';
+                document.getElementById('aesthetic-count').textContent = `${filteredCount} / ${totalCount} 项`;
+            } else {
+                filterInfoEl.style.display = 'none';
+                document.getElementById('aesthetic-count').textContent = `共 ${totalCount} 项`;
+            }
+            
+            document.getElementById('aesthetic-clear-filter').style.display = hasFilter ? 'inline-block' : 'none';
+        }
+        
+        // 保存审美模式滚动位置（使用缓存机制）- 已禁用，使用筛选查看器后不再需要
+        /* function saveAestheticScrollPosition() {
+            // 如果正在恢复位置，禁止保存（避免覆盖正确的位置）
+            if (isRestoringScrollPosition) {
+                return;
+            }
+            
+            if (!aestheticMode || !aestheticPath) return;
+            const scrollContainer = document.getElementById('aesthetic-scroll-container');
+            const grid = document.getElementById('aesthetic-grid');
+            if (!scrollContainer || !grid) return;
+            
+            // 找到当前可见区域的第一个图片元素
+            const items = Array.from(grid.querySelectorAll('.image-item'));
+            let targetOriginalIndex = null;
+            let targetItemIndex = -1;
+            
+            // 找到第一个可见的图片（在容器顶部附近）
+            const containerRect = scrollContainer.getBoundingClientRect();
+            const viewportTop = containerRect.top;
+            const viewportBottom = containerRect.bottom;
+            
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const itemRect = item.getBoundingClientRect();
+                
+                // 检查图片是否在可见区域内（优先选择靠近顶部的）
+                if (itemRect.top >= viewportTop - 100 && itemRect.top <= viewportBottom) {
+                    targetItemIndex = i;
+                    break;
+                }
+            }
+            
+            // 如果没找到，找最接近顶部的
+            if (targetItemIndex === -1 && items.length > 0) {
+                let minDistance = Infinity;
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    const itemRect = item.getBoundingClientRect();
+                    const distance = Math.abs(itemRect.top - viewportTop);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        targetItemIndex = i;
+                    }
+                }
+            }
+            
+            // 获取目标图片的 originalIndex
+            if (targetItemIndex >= 0 && targetItemIndex < aestheticItems.length) {
+                targetOriginalIndex = aestheticItems[targetItemIndex]._originalIndex;
+            }
+            
+            const scrollState = {
+                targetOriginalIndex: targetOriginalIndex,  // 主要使用这个
+                scrollTop: scrollContainer.scrollTop,      // 备用
+                author: aestheticAuthor,
+                work: aestheticWork,
+                renderedCount: aestheticRenderedCount
+            };
+            localStorage.setItem(`aesthetic_scroll_${aestheticPath}`, JSON.stringify(scrollState));
+            console.log('保存滚动位置:', scrollState); // 调试输出
+        } */
+        
+        // 恢复审美模式滚动位置（使用缓存机制，更可靠）- 已禁用，使用筛选查看器后不再需要
+        /* function restoreAestheticScrollPosition() {
+            if (!aestheticMode || !aestheticPath) return;
+            const scrollContainer = document.getElementById('aesthetic-scroll-container');
+            const grid = document.getElementById('aesthetic-grid');
+            if (!scrollContainer || !grid) return;
+            
+            try {
+                const saved = localStorage.getItem(`aesthetic_scroll_${aestheticPath}`);
+                if (!saved) {
+                    console.log('没有保存的滚动位置');
+                    return;
+                }
+                
+                const scrollState = JSON.parse(saved);
+                console.log('恢复滚动位置:', scrollState, '当前筛选:', {author: aestheticAuthor, work: aestheticWork}); // 调试输出
+                
+                // 设置恢复标志，禁止在此期间保存
+                isRestoringScrollPosition = true;
+                
+                // 优先使用 targetOriginalIndex 定位（更准确，特别是清除筛选时）
+                if (scrollState.targetOriginalIndex !== null && scrollState.targetOriginalIndex !== undefined) {
+                    // 等待一下确保 DOM 已更新和 Masonry 布局完成
+                    setTimeout(() => {
+                        const items = Array.from(grid.querySelectorAll('.image-item'));
+                        console.log('当前渲染的图片数量:', items.length, 'aestheticItems 数量:', aestheticItems.length, '目标 originalIndex:', scrollState.targetOriginalIndex);
+                        
+                        // 在 aestheticItems 中找到对应的索引
+                        let targetItemIndex = -1;
+                        for (let i = 0; i < aestheticItems.length; i++) {
+                            if (aestheticItems[i]._originalIndex === scrollState.targetOriginalIndex) {
+                                targetItemIndex = i;
+                                break;
+                            }
+                        }
+                        
+                        console.log('目标图片索引:', targetItemIndex, 'originalIndex:', scrollState.targetOriginalIndex);
+                        
+                        // 如果目标图片还没渲染，先懒加载
+                        if (targetItemIndex >= 0 && targetItemIndex >= items.length) {
+                            console.log('目标图片未渲染，先加载更多图片...');
+                            const needLoad = targetItemIndex - items.length + 10; // 多加载一些
+                            loadMoreAesthetic(needLoad);
+                            
+                            // 等待加载完成后再恢复（已禁用，使用筛选查看器后不再需要）
+                            // setTimeout(() => {
+                            //     restoreAestheticScrollPosition();
+                            // }, 200);
+                            return;
+                        }
+                        
+                        if (targetItemIndex >= 0 && targetItemIndex < items.length) {
+                            const targetItem = items[targetItemIndex];
+                            
+                            // 确保元素可见
+                            if (targetItem.offsetParent !== null) {
+                                // 先尝试使用 scrollIntoView
+                                targetItem.scrollIntoView({ 
+                                    behavior: 'auto', 
+                                    block: 'start',
+                                    inline: 'nearest'
+                                });
+                                
+                                // 如果 scrollIntoView 没有正确滚动，使用手动计算
+                                setTimeout(() => {
+                                    const containerRect = scrollContainer.getBoundingClientRect();
+                                    const itemRect = targetItem.getBoundingClientRect();
+                                    
+                                    // 检查是否真的滚动到了目标位置
+                                    if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
+                                        // 手动计算并设置 scrollTop
+                                        let offsetTop = 0;
+                                        let element = targetItem;
+                                        while (element && element !== scrollContainer) {
+                                            offsetTop += element.offsetTop;
+                                            element = element.offsetParent;
+                                        }
+                                        scrollContainer.scrollTop = Math.max(0, offsetTop - 20); // 留一点边距
+                                        console.log('手动设置 scrollTop:', scrollContainer.scrollTop);
+                                    }
+                                }, 50);
+                                
+                                console.log('✓ 已滚动到目标图片，索引:', targetItemIndex, 'originalIndex:', scrollState.targetOriginalIndex);
+                                
+                                // 恢复完成，清除标志（延迟一点确保滚动完成）
+                                setTimeout(() => {
+                                    isRestoringScrollPosition = false;
+                                }, 300);
+                            } else {
+                                console.warn('目标图片元素不可见，尝试使用 scrollTop');
+                                // 计算目标元素的位置
+                                let offsetTop = 0;
+                                let element = targetItem;
+                                while (element && element !== scrollContainer) {
+                                    offsetTop += element.offsetTop;
+                                    element = element.offsetParent;
+                                }
+                                scrollContainer.scrollTop = Math.max(0, offsetTop - 20);
+                                
+                                // 恢复完成，清除标志
+                                setTimeout(() => {
+                                    isRestoringScrollPosition = false;
+                                }, 300);
+                            }
+                        } else {
+                            console.warn('未找到目标图片，索引:', targetItemIndex, 'originalIndex:', scrollState.targetOriginalIndex, 'items.length:', items.length);
+                            // 回退到使用 scrollTop
+                            if (scrollState.scrollTop !== undefined && scrollState.scrollTop > 0) {
+                                scrollContainer.scrollTop = scrollState.scrollTop;
+                                console.log('使用 scrollTop 恢复:', scrollState.scrollTop);
+                            }
+                            
+                            // 恢复完成，清除标志
+                            setTimeout(() => {
+                                isRestoringScrollPosition = false;
+                            }, 300);
+                        }
+                    }, 150);
+                    return;
+                }
+                
+                // 如果没有 targetOriginalIndex，使用 scrollTop（向后兼容）
+                if (scrollState.scrollTop !== undefined) {
+                    scrollContainer.scrollTop = scrollState.scrollTop;
+                    console.log('使用 scrollTop 恢复（无索引）:', scrollState.scrollTop);
+                }
+                
+                // 恢复完成，清除标志
+                setTimeout(() => {
+                    isRestoringScrollPosition = false;
+                }, 300);
+            } catch (e) {
+                console.error('恢复滚动位置失败:', e);
+                // 出错时也要清除标志
+                isRestoringScrollPosition = false;
+            }
+        } */
+        
+        // Pinterest 风格：更新 URL 参数但不刷新页面
+        function updateAestheticURL() {
+            if (!aestheticMode || !aestheticPath) return;
+            
+            const params = new URLSearchParams(window.location.search);
+            
+            // 更新或删除筛选参数
+            if (aestheticAuthor) {
+                params.set('author', aestheticAuthor);
+            } else {
+                params.delete('author');
+            }
+            
+            if (aestheticWork) {
+                params.set('work', aestheticWork);
+            } else {
+                params.delete('work');
+            }
+            
+            // 使用 replaceState 避免在历史记录中创建过多条目
+            const newURL = params.toString() 
+                ? `${window.location.pathname}?${params.toString()}`
+                : window.location.pathname;
+            
+            window.history.replaceState(
+                { author: aestheticAuthor, work: aestheticWork },
+                '',
+                newURL
+            );
+        }
+        
+        // 从 URL 参数恢复筛选状态
+        function restoreAestheticFilterFromURL() {
+            if (!aestheticMode) return false;
+            
+            const params = new URLSearchParams(window.location.search);
+            const urlAuthor = params.get('author');
+            const urlWork = params.get('work');
+            
+            // 如果 URL 中有参数且与当前状态不同，则恢复
+            if (urlAuthor !== aestheticAuthor || urlWork !== aestheticWork) {
+                aestheticAuthor = urlAuthor || null;
+                aestheticWork = urlWork || null;
+                return true;  // 表示需要应用筛选
+            }
+            
+            return false;  // 无需改变
+        }
+        
+        // 前端筛选函数（不发起网络请求，筛选后按原始索引排序保持顺序一致）
+        function applyAestheticFilter() {
+            const hasFilter = aestheticAuthor || aestheticWork;
+            
+            // 更新 URL（Pinterest 风格：不刷新页面）
+            updateAestheticURL();
+            
+            // 保存当前滚动位置（已禁用，使用筛选查看器后不再需要）
+            // saveAestheticScrollPosition();
+            
+            // 记住之前渲染了多少张图片
+            const previousRenderedCount = aestheticRenderedCount;
+            
+            // 从缓存中筛选，保留原始索引 (_originalIndex)
+            if (hasFilter) {
+                aestheticItems = aestheticAllItems.filter(item => {
+                    if (aestheticAuthor && item.author !== aestheticAuthor) return false;
+                    if (aestheticWork && item.work !== aestheticWork) return false;
+                    return true;
+                });
+            } else {
+                aestheticItems = [...aestheticAllItems];
+            }
+            
+            // 按原始索引排序，确保顺序一致
+            aestheticItems.sort((a, b) => a._originalIndex - b._originalIndex);
+            
+            // 重新渲染，保持之前的渲染数量（或者新筛选结果的全部，取较小值）
+            renderAestheticItems(hasFilter ? null : previousRenderedCount);
+            
+            // 更新 UI
+            updateAestheticUI();
+            
+            // 恢复滚动位置在 renderAestheticItems 的图片加载完成后执行
+        }
+
+        function renderAestheticItems(preserveCount = null) {
             const grid = document.getElementById('aesthetic-grid');
             grid.innerHTML = '';
 
-            aestheticRenderedCount = Math.min(AESTHETIC_BATCH_SIZE, aestheticItems.length);
+            // 渐进式渲染：如果指定了 preserveCount，使用它；否则初始只渲染少量内容
+            if (preserveCount !== null && preserveCount > AESTHETIC_BATCH_SIZE) {
+                aestheticRenderedCount = Math.min(preserveCount, aestheticItems.length);
+            } else {
+                // 初始只渲染少量内容，确保在可见区域内
+                aestheticRenderedCount = Math.min(AESTHETIC_INITIAL_SIZE, aestheticItems.length);
+            }
+            
             const initialBatch = aestheticItems.slice(0, aestheticRenderedCount);
-            grid.innerHTML = initialBatch.map((item, idx) => `<div class="image-item">${createAestheticHTML(item, idx)}</div>`).join('');
+            grid.innerHTML = initialBatch.map((item, idx) => {
+                const author = (item.author || '').replace(/"/g, '&quot;');
+                const work = (item.work || '').replace(/"/g, '&quot;');
+                return `<div class="image-item" data-author="${author}" data-work="${work}">${createAestheticHTML(item, idx)}</div>`;
+            }).join('');
 
-            // 初始化 Masonry
+            // 初始化 Masonry（使用 requestAnimationFrame 立即初始化，加快响应）
             if (msnry) {
                 msnry.destroy();
             }
-            msnry = new Masonry(grid, { itemSelector: '.image-item', percentPosition: true });
-            imagesLoaded(grid).on('progress', function () { if (msnry) msnry.layout(); });
+            requestAnimationFrame(() => {
+                msnry = new Masonry(grid, { 
+                    itemSelector: '.image-item', 
+                    percentPosition: true,
+                    transitionDuration: '0.2s'  // 减少动画时间
+                });
+                // 立即执行一次布局
+                msnry.layout();
+                
+                // 监听图片加载进度，使用 requestAnimationFrame 优化性能
+                imagesLoaded(grid).on('progress', function () { 
+                    if (msnry) {
+                        requestAnimationFrame(() => {
+                            msnry.layout();
+                        });
+                    }
+                });
+            });
+            
+            // 图片加载完成后恢复滚动位置（使用缓存机制）- 已禁用，使用筛选查看器后不再需要
+            // imagesLoaded(grid).on('always', function() {
+            //     // 等待 Masonry 布局完成和 DOM 更新
+            //     setTimeout(() => {
+            //         restoreAestheticScrollPosition();
+            //     }, 300);
+            // });
 
-            // 初始化审美模式 Viewer（仅用于大图预览）
+            // 初始化审美模式 Viewer（延迟到下一帧，不影响布局性能）
             if (window.aestheticViewer) {
                 window.aestheticViewer.destroy();
             }
-            window.aestheticViewer = new Viewer(grid, {
-                url: 'data-original',
-                toolbar: {
-                    zoomIn: 1,
-                    zoomOut: 1,
-                    oneToOne: 1,
-                    reset: 1,
-                    prev: 1,
-                    play: 0,
-                    next: 1,
-                    rotateLeft: 1,
-                    rotateRight: 1,
-                    flipHorizontal: 1,
-                    flipVertical: 1,
-                },
-                title: function (image) {
-                    return image.alt;
-                },
-                viewed() {
-                    updateAestheticViewerUI(this.image);
-                },
+            requestAnimationFrame(() => {
+                window.aestheticViewer = new Viewer(grid, {
+                    url: 'data-original',
+                    toolbar: {
+                        zoomIn: 1,
+                        zoomOut: 1,
+                        oneToOne: 1,
+                        reset: 1,
+                        prev: 1,
+                        play: 0,
+                        next: 1,
+                        rotateLeft: 1,
+                        rotateRight: 1,
+                        flipHorizontal: 1,
+                        flipVertical: 1,
+                    },
+                    title: function (image) {
+                        return image.alt;
+                    },
+                    viewed() {
+                        updateAestheticViewerUI(this.image);
+                    },
+                });
             });
 
-            // 绑定作者与作品点击
-            grid.querySelectorAll('.aesthetic-meta .author').forEach(el => {
-                el.addEventListener('click', () => {
-                    aestheticAuthor = el.dataset.author;
-                    aestheticWork = null;
-                    reloadAesthetic();
-                });
-            });
-            grid.querySelectorAll('.aesthetic-meta .work').forEach(el => {
-                el.addEventListener('click', () => {
-                    aestheticAuthor = el.dataset.author || '';
-                    aestheticWork = el.dataset.work;
-                    reloadAesthetic();
-                });
-            });
+            // 事件委托已在初始化时设置，无需逐个绑定
         }
 
         function createAestheticHTML(item, idx) {
@@ -2207,12 +3832,607 @@
         }
 
         function clearAestheticFilter() {
+            // 在清除筛选前，先保存当前的滚动位置（筛选状态下的位置）- 已禁用，使用筛选查看器后不再需要
+            /* const scrollContainer = document.getElementById('aesthetic-scroll-container');
+            const grid = document.getElementById('aesthetic-grid');
+            let savedState = null;
+            
+            if (scrollContainer && grid && scrollContainer.scrollTop > 0) {
+                const items = Array.from(grid.querySelectorAll('.image-item'));
+                let targetOriginalIndex = null;
+                let targetItemIndex = -1;
+                
+                const containerRect = scrollContainer.getBoundingClientRect();
+                const viewportTop = containerRect.top;
+                const viewportBottom = containerRect.bottom;
+                
+                // 找到第一个可见的图片（使用当前的 aestheticItems，即筛选后的结果）
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    const itemRect = item.getBoundingClientRect();
+                    
+                    // 检查图片是否在可见区域内（优先选择靠近顶部的）
+                    if (itemRect.top >= viewportTop - 100 && itemRect.top <= viewportBottom) {
+                        targetItemIndex = i;
+                        break;
+                    }
+                }
+                
+                // 如果没找到，找最接近顶部的
+                if (targetItemIndex === -1 && items.length > 0) {
+                    let minDistance = Infinity;
+                    for (let i = 0; i < items.length; i++) {
+                        const item = items[i];
+                        const itemRect = item.getBoundingClientRect();
+                        const distance = Math.abs(itemRect.top - viewportTop);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            targetItemIndex = i;
+                        }
+                    }
+                }
+                
+                // 获取目标图片的 originalIndex（使用筛选状态下的 aestheticItems）
+                if (targetItemIndex >= 0 && targetItemIndex < aestheticItems.length) {
+                    targetOriginalIndex = aestheticItems[targetItemIndex]._originalIndex;
+                    console.log('清除筛选前找到图片 - 索引:', targetItemIndex, 'originalIndex:', targetOriginalIndex, 'scrollTop:', scrollContainer.scrollTop);
+                    
+                    // 保存到 localStorage（使用筛选状态下的数据）
+                    savedState = {
+                        targetOriginalIndex: targetOriginalIndex,
+                        scrollTop: scrollContainer.scrollTop,
+                        author: aestheticAuthor,  // 保存当前的筛选状态
+                        work: aestheticWork,
+                        renderedCount: aestheticRenderedCount
+                    };
+                    localStorage.setItem(`aesthetic_scroll_${aestheticPath}`, JSON.stringify(savedState));
+                    console.log('清除筛选前保存位置:', savedState);
+                } else {
+                    console.warn('清除筛选前未找到可见图片 - targetItemIndex:', targetItemIndex, 'items.length:', items.length, 'aestheticItems.length:', aestheticItems.length, 'scrollTop:', scrollContainer.scrollTop);
+                }
+            } else {
+                console.warn('清除筛选前无法保存位置 - scrollTop:', scrollContainer?.scrollTop, 'grid存在:', !!grid);
+            } */
+            
+            const previousRenderedCount = aestheticRenderedCount;
             aestheticAuthor = null;
             aestheticWork = null;
-            reloadAesthetic();
+            
+            // 更新 URL（Pinterest 风格：清除筛选参数）
+            updateAestheticURL();
+            
+            // 恢复全部数据
+            aestheticItems = [...aestheticAllItems];
+            aestheticItems.sort((a, b) => a._originalIndex - b._originalIndex);
+            
+            // 重新渲染，保持之前的渲染数量
+            renderAestheticItems(previousRenderedCount);
+            
+            // 更新 UI
+            updateAestheticUI();
+            
+            // 恢复滚动位置在 renderAestheticItems 的图片加载完成后执行
+            
+            showNotification('已清除筛选', 'info');
+        }
+
+        // ========== 筛选结果查看器（独立面板，不影响主页面DOM）==========
+        let filterViewerMasonry = null;
+        let filterViewerItems = [];
+        let filterViewerRenderedCount = 0;
+        const FILTER_VIEWER_BATCH_SIZE = 30;
+        const FILTER_VIEWER_INITIAL_SIZE = 12;  // 初始只渲染12个，确保在可见区域
+        const FILTER_VIEWER_LOAD_THRESHOLD = 0.7;  // 滚动到70%时开始加载更多
+        
+        // 筛选历史栈：记录每次筛选的状态，支持回退
+        let filterViewerHistory = [];
+        let filterViewerCurrentState = { author: null, work: null, items: [], sourceItems: [], layerId: null };
+        let filterViewerLayerCounter = 0;  // 层级计数器，用于生成唯一ID
+        let filterViewerLayers = {};  // 存储每个层级的DOM和Masonry实例
+
+        // 打开筛选结果查看器（支持基于当前筛选结果进行二次筛选，保持DOM不变）
+        function openFilterViewer(author, work, sourceItems = null) {
+            if (!aestheticMode || !aestheticAllItems.length) {
+                showNotification('请先进入审美模式并加载数据', 'warning');
+                return;
+            }
+
+            // 如果提供了 sourceItems，说明是基于当前筛选结果进行二次筛选
+            // 否则，从全部数据开始筛选
+            const baseItems = sourceItems || aestheticAllItems;
+
+            // 筛选数据
+            filterViewerItems = baseItems.filter(item => {
+                if (author && item.author !== author) return false;
+                if (work && item.work !== work) return false;
+                return true;
+            });
+
+            // 按原始索引排序
+            filterViewerItems.sort((a, b) => a._originalIndex - b._originalIndex);
+
+            // 保存当前状态到历史栈（如果筛选查看器已经打开，说明是二次筛选）
+            const isViewerOpen = document.getElementById('filter-viewer').style.display === 'flex';
+            if (isViewerOpen && filterViewerCurrentState.items.length > 0 && filterViewerCurrentState.layerId) {
+                // 保存当前层级的滚动位置
+                const scrollContainer = document.getElementById('filter-viewer-scroll-container');
+                const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+                
+                // 隐藏当前层级（不删除DOM）
+                const currentLayer = filterViewerLayers[filterViewerCurrentState.layerId];
+                if (currentLayer) {
+                    currentLayer.container.style.display = 'none';
+                    currentLayer.container.style.opacity = '0.3';  // 父级半透明显示
+                }
+                
+                filterViewerHistory.push({
+                    author: filterViewerCurrentState.author,
+                    work: filterViewerCurrentState.work,
+                    items: filterViewerCurrentState.items,
+                    sourceItems: filterViewerCurrentState.sourceItems,
+                    layerId: filterViewerCurrentState.layerId,
+                    scrollTop: scrollTop  // 保存滚动位置
+                });
+            }
+
+            // 创建新的层级ID
+            filterViewerLayerCounter++;
+            const newLayerId = `filter-layer-${filterViewerLayerCounter}`;
+
+            // 更新当前状态
+            filterViewerCurrentState = {
+                author: author,
+                work: work,
+                items: filterViewerItems,
+                sourceItems: baseItems,
+                layerId: newLayerId
+            };
+
+            // 更新UI信息
+            updateFilterViewerUI();
+
+            // 显示筛选查看器
+            document.getElementById('filter-viewer').style.display = 'flex';
+            
+            // 设置滚动监听器（如果还没有设置）
+            setupFilterViewerScrollListener();
+            
+            // 渲染新的筛选结果层级（不删除旧的）
+            renderFilterViewerLayer(newLayerId, filterViewerItems);
+        }
+
+        // 更新筛选查看器UI（包括路径和回退按钮）
+        function updateFilterViewerUI() {
+            const pathEl = document.getElementById('filter-viewer-path');
+            const countEl = document.getElementById('filter-viewer-count');
+            const backBtn = document.getElementById('filter-viewer-back-btn');
+            
+            // 构建筛选路径（面包屑导航）
+            const pathParts = [];
+            if (filterViewerCurrentState.author) {
+                pathParts.push(`作者: ${filterViewerCurrentState.author}`);
+            }
+            if (filterViewerCurrentState.work) {
+                pathParts.push(`作品: ${filterViewerCurrentState.work}`);
+            }
+            
+            if (pathParts.length > 0) {
+                pathEl.textContent = pathParts.join(' > ');
+            } else {
+                pathEl.textContent = '全部作品';
+            }
+            
+            countEl.textContent = `共 ${filterViewerCurrentState.items.length} 个作品`;
+            
+            // 显示/隐藏回退按钮
+            if (filterViewerHistory.length > 0) {
+                backBtn.style.display = 'inline-flex';
+            } else {
+                backBtn.style.display = 'none';
+            }
+        }
+
+        // 回退到上一个筛选状态（显示上一个层级，不删除当前层级DOM，恢复滚动位置）
+        function filterViewerGoBack() {
+            if (filterViewerHistory.length === 0) return;
+            
+            // 隐藏当前层级
+            if (filterViewerCurrentState.layerId) {
+                const currentLayer = filterViewerLayers[filterViewerCurrentState.layerId];
+                if (currentLayer) {
+                    currentLayer.container.style.display = 'none';
+                }
+            }
+            
+            // 从历史栈中恢复上一个状态
+            const previousState = filterViewerHistory.pop();
+            filterViewerCurrentState = previousState;
+            filterViewerItems = previousState.items;
+            
+            // 显示上一个层级
+            if (previousState.layerId) {
+                const previousLayer = filterViewerLayers[previousState.layerId];
+                if (previousLayer) {
+                    previousLayer.container.style.display = 'block';
+                    previousLayer.container.style.opacity = '1';
+                }
+            }
+            
+            // 更新UI
+            updateFilterViewerUI();
+            
+            // 恢复滚动位置（等待DOM更新和布局完成）
+            if (previousState.scrollTop !== undefined && previousState.scrollTop !== null) {
+                const scrollContainer = document.getElementById('filter-viewer-scroll-container');
+                if (scrollContainer) {
+                    // 等待DOM更新和Masonry布局完成
+                    setTimeout(() => {
+                        scrollContainer.scrollTop = previousState.scrollTop;
+                        // 如果Masonry还在布局，再等待一下
+                        if (previousState.layerId) {
+                            const layer = filterViewerLayers[previousState.layerId];
+                            if (layer && layer.masonry) {
+                                layer.masonry.layout();
+                                setTimeout(() => {
+                                    scrollContainer.scrollTop = previousState.scrollTop;
+                                }, 100);
+                            }
+                        }
+                    }, 100);
+                }
+            }
+            
+            showNotification('已回退到上一个筛选状态', 'info');
+        }
+
+        // 关闭筛选结果查看器
+        function closeFilterViewer() {
+            document.getElementById('filter-viewer').style.display = 'none';
+            filterViewerItems = [];
+            filterViewerRenderedCount = 0;
+            
+            // 清空筛选历史和所有层级
+            filterViewerHistory = [];
+            filterViewerCurrentState = { author: null, work: null, items: [], sourceItems: [], layerId: null };
+            
+            // 清理所有层级的 Masonry 和 Viewer 实例
+            for (const layerId in filterViewerLayers) {
+                const layer = filterViewerLayers[layerId];
+                if (layer.masonry) {
+                    layer.masonry.destroy();
+                }
+                if (layer.viewer) {
+                    layer.viewer.destroy();
+                }
+                if (layer.container) {
+                    layer.container.remove();
+                }
+            }
+            filterViewerLayers = {};
+            filterViewerLayerCounter = 0;
+            
+            // 清理旧的全局实例（兼容旧代码）
+            if (filterViewerMasonry) {
+                filterViewerMasonry.destroy();
+                filterViewerMasonry = null;
+            }
+            if (window.filterViewer) {
+                window.filterViewer.destroy();
+                window.filterViewer = null;
+            }
+        }
+
+        // 渲染筛选查看器层级（保持DOM不变，每个层级独立）
+        function renderFilterViewerLayer(layerId, items) {
+            const layersContainer = document.getElementById('filter-viewer-layers');
+            if (!layersContainer) return;
+
+            // 检查层级是否已存在
+            let layerContainer = document.getElementById(layerId);
+            if (!layerContainer) {
+                // 创建新的层级容器（使用普通布局，不绝对定位）
+                layerContainer = document.createElement('div');
+                layerContainer.id = layerId;
+                layerContainer.className = 'filter-viewer-layer';
+                layerContainer.style.width = '100%';
+                layerContainer.style.display = 'none';  // 默认隐藏
+                layersContainer.appendChild(layerContainer);
+            } else {
+                // 如果已存在，清空内容重新渲染
+                layerContainer.innerHTML = '';
+            }
+
+            // 隐藏所有其他层级
+            for (const id in filterViewerLayers) {
+                if (id !== layerId && filterViewerLayers[id].container) {
+                    filterViewerLayers[id].container.style.display = 'none';
+                }
+            }
+
+            // 显示当前层级
+            layerContainer.style.display = 'block';
+            layerContainer.style.opacity = '1';
+
+            if (items.length === 0) {
+                layerContainer.innerHTML = `
+                    <div class="no-images">
+                        <i class="fas fa-image" style="font-size: 48px; margin-bottom: 20px; opacity: 0.3;"></i>
+                        <p>没有找到匹配的作品</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // 创建网格容器
+            const grid = document.createElement('div');
+            grid.className = 'image-grid';
+            grid.id = `${layerId}-grid`;
+            
+            // 渐进式渲染：初始只渲染少量内容（确保在可见区域内）
+            const initialCount = Math.min(FILTER_VIEWER_INITIAL_SIZE, items.length);
+            const initialBatch = items.slice(0, initialCount);
+            
+            grid.innerHTML = initialBatch.map((item, idx) => {
+                const author = (item.author || '').replace(/"/g, '&quot;');
+                const work = (item.work || '').replace(/"/g, '&quot;');
+                return `<div class="image-item" data-author="${author}" data-work="${work}">${createAestheticHTML(item, idx)}</div>`;
+            }).join('');
+            
+            layerContainer.appendChild(grid);
+            
+            // 保存渲染状态（在函数作用域内）
+            const currentRenderedCount = initialCount;
+
+            // 如果层级已存在，先清理旧的实例（立即执行，不等待）
+            if (filterViewerLayers[layerId]) {
+                if (filterViewerLayers[layerId].masonry) {
+                    filterViewerLayers[layerId].masonry.destroy();
+                }
+                if (filterViewerLayers[layerId].viewer) {
+                    filterViewerLayers[layerId].viewer.destroy();
+                }
+            }
+
+            // 使用 requestAnimationFrame 立即初始化 Masonry（比 setTimeout 更快更流畅）
+            requestAnimationFrame(() => {
+                // 初始化该层级的 Masonry 实例（立即初始化，不等待图片加载）
+                const layerMasonry = new Masonry(grid, { 
+                    itemSelector: '.image-item', 
+                    percentPosition: true,
+                    transitionDuration: '0.2s'  // 减少动画时间，加快响应
+                });
+                
+                // 立即执行一次布局（不等待图片加载）
+                layerMasonry.layout();
+                
+                // 监听图片加载进度，更新布局（异步处理，不阻塞）
+                imagesLoaded(grid).on('progress', function () { 
+                    if (layerMasonry) {
+                        requestAnimationFrame(() => {
+                            layerMasonry.layout();
+                        });
+                    }
+                });
+                
+                // 所有图片加载完成后，确保布局正确
+                imagesLoaded(grid).on('always', function() {
+                    if (layerMasonry) {
+                        requestAnimationFrame(() => {
+                            layerMasonry.layout();
+                            // 确保层级容器高度正确（根据内容自动增长）
+                            const gridHeight = grid.offsetHeight;
+                            if (gridHeight > 0) {
+                                layerContainer.style.height = 'auto';
+                                layerContainer.style.minHeight = '100%';
+                            }
+                        });
+                    }
+                });
+
+                // 先保存层级信息（Masonry 已初始化）
+                filterViewerLayers[layerId] = {
+                    container: layerContainer,
+                    grid: grid,
+                    masonry: layerMasonry,
+                    viewer: null,  // Viewer 将在下一帧初始化
+                    renderedCount: currentRenderedCount,
+                    items: items
+                };
+
+                // Viewer.js 初始化延迟到下一帧（不影响布局性能）
+                requestAnimationFrame(() => {
+                    const layerViewer = new Viewer(grid, {
+                        url: 'data-original',
+                        toolbar: {
+                            zoomIn: 1,
+                            zoomOut: 1,
+                            oneToOne: 1,
+                            reset: 1,
+                            prev: 1,
+                            play: 1,
+                            next: 1,
+                            rotateLeft: 1,
+                            rotateRight: 1,
+                            flipHorizontal: 1,
+                            flipVertical: 1
+                        },
+                        navbar: false,
+                        title: false,
+                        viewed: function() {
+                            const image = this.image;
+                            updateAestheticViewerUI(image);
+                        }
+                    });
+
+                    // 更新层级信息（添加 Viewer）
+                    if (filterViewerLayers[layerId]) {
+                        filterViewerLayers[layerId].viewer = layerViewer;
+                    }
+                });
+            });
+        }
+
+        // 为筛选查看器父容器添加滚动监听器（懒加载当前显示的层级）
+        function setupFilterViewerScrollListener() {
+            const scrollContainer = document.getElementById('filter-viewer-scroll-container');
+            if (!scrollContainer) return;
+            
+            // 移除旧的监听器（如果存在）
+            if (scrollContainer._filterViewerScrollHandler) {
+                scrollContainer.removeEventListener('scroll', scrollContainer._filterViewerScrollHandler);
+            }
+            
+            // 添加新的滚动监听器（渐进式加载）
+            scrollContainer._filterViewerScrollHandler = debounce(function() {
+                const viewer = document.getElementById('filter-viewer');
+                if (!viewer || viewer.style.display !== 'flex') return;
+                
+                // 获取当前显示的层级
+                const currentLayerId = filterViewerCurrentState.layerId;
+                if (!currentLayerId) return;
+                
+                const layer = filterViewerLayers[currentLayerId];
+                if (!layer || layer.container.style.display === 'none') return;
+                
+                // 如果已经全部渲染，不需要加载
+                if (layer.renderedCount >= layer.items.length) return;
+                
+                // 计算滚动进度（0-1）
+                const scrollTop = scrollContainer.scrollTop;
+                const scrollHeight = scrollContainer.scrollHeight;
+                const clientHeight = scrollContainer.clientHeight;
+                const scrollProgress = scrollTop / (scrollHeight - clientHeight);
+                
+                // 当滚动到阈值时，开始加载更多（确保内容在屏幕下方）
+                if (scrollProgress >= FILTER_VIEWER_LOAD_THRESHOLD) {
+                    // 计算需要加载的数量（根据滚动位置动态调整）
+                    const remaining = layer.items.length - layer.renderedCount;
+                    const loadCount = Math.min(8, remaining);  // 每次加载8个，避免堆积
+                    
+                    if (loadCount > 0) {
+                        loadMoreFilterViewerLayer(currentLayerId, loadCount);
+                    }
+                }
+            }, 50);  // 减少防抖时间，响应更快
+            
+            scrollContainer.addEventListener('scroll', scrollContainer._filterViewerScrollHandler);
+        }
+
+        // 筛选查看器层级懒加载（渐进式，确保内容在屏幕下方）
+        function loadMoreFilterViewerLayer(layerId, count) {
+            const layer = filterViewerLayers[layerId];
+            if (!layer || layer.renderedCount >= layer.items.length) return;
+            
+            // 防止重复加载
+            if (layer._loading) return;
+            layer._loading = true;
+            
+            const grid = layer.grid;
+            const scrollContainer = document.getElementById('filter-viewer-scroll-container');
+            const start = layer.renderedCount;
+            const toLoad = Math.min(count, layer.items.length - start);
+            const batch = layer.items.slice(start, start + toLoad);
+            
+            if (batch.length === 0) {
+                layer._loading = false;
+                return;
+            }
+            
+            // 记录当前滚动位置（确保新内容在屏幕下方）
+            const currentScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+            
+            // 使用临时 div 创建元素
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = batch.map((item, idx) => {
+                const author = (item.author || '').replace(/"/g, '&quot;');
+                const work = (item.work || '').replace(/"/g, '&quot;');
+                return `<div class="image-item" data-author="${author}" data-work="${work}">${createAestheticHTML(item, start + idx)}</div>`;
+            }).join('');
+            
+            // 获取新创建的元素数组
+            const newElements = Array.from(tempDiv.children);
+            
+            // 使用 requestAnimationFrame 优化性能
+            requestAnimationFrame(() => {
+                newElements.forEach(el => grid.appendChild(el));
+                
+                layer.renderedCount += toLoad;
+                
+                // 更新 Masonry 布局
+                if (layer.masonry) {
+                    layer.masonry.appended(newElements);
+                    // 立即布局，确保内容在下方
+                    layer.masonry.layout();
+                }
+                
+                // 确保滚动位置不变（新内容在下方，不会影响当前视图）
+                if (scrollContainer && currentScrollTop > 0) {
+                    scrollContainer.scrollTop = currentScrollTop;
+                }
+                
+                // 更新 Viewer.js（延迟到下一帧）
+                requestAnimationFrame(() => {
+                    if (layer.viewer) {
+                        layer.viewer.update();
+                    }
+                    
+                    // 监听图片加载，更新布局
+                    imagesLoaded(newElements).on('progress', function () {
+                        if (layer.masonry) {
+                            requestAnimationFrame(() => {
+                                layer.masonry.layout();
+                            });
+                        }
+                    });
+                    
+                    layer._loading = false;
+                });
+            });
+        }
+
+        // 筛选查看器懒加载
+        function loadMoreFilterViewer(count) {
+            if (filterViewerRenderedCount >= filterViewerItems.length) return;
+            
+            const grid = document.getElementById('filter-viewer-grid');
+            const start = filterViewerRenderedCount;
+            const toLoad = Math.min(count, filterViewerItems.length - start);
+            const batch = filterViewerItems.slice(start, start + toLoad);
+            
+            if (batch.length === 0) return;
+            
+            // 使用临时 div 创建元素（与审美模式保持一致）
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = batch.map((item, idx) => {
+                const author = (item.author || '').replace(/"/g, '&quot;');
+                const work = (item.work || '').replace(/"/g, '&quot;');
+                return `<div class="image-item" data-author="${author}" data-work="${work}">${createAestheticHTML(item, start + idx)}</div>`;
+            }).join('');
+            
+            // 获取新创建的元素数组
+            const newElements = Array.from(tempDiv.children);
+            newElements.forEach(el => grid.appendChild(el));
+            
+            filterViewerRenderedCount += toLoad;
+            
+            // 更新 Masonry 布局
+            if (filterViewerMasonry) {
+                filterViewerMasonry.appended(newElements);
+            }
+            
+            // 更新 Viewer.js
+            if (window.filterViewer) {
+                window.filterViewer.update();
+            }
+            
+            // 监听图片加载，更新布局
+            imagesLoaded(newElements).on('progress', function () {
+                if (filterViewerMasonry) filterViewerMasonry.layout();
+            });
         }
 
         // 审美模式懒加载更多缩略图
+        // 审美模式懒加载（渐进式，确保内容在屏幕下方）
         function loadMoreAesthetic(count) {
             if (aestheticRenderedCount >= aestheticItems.length) return;
 
@@ -2221,25 +4441,54 @@
             if (nextBatch.length === 0) return;
 
             const grid = document.getElementById('aesthetic-grid');
+            const scrollContainer = document.getElementById('aesthetic-scroll-container');
+            
+            // 记录当前滚动位置（确保新内容在屏幕下方）
+            const currentScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+            
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = nextBatch.map((item, idx) => `<div class="image-item">${createAestheticHTML(item, start + idx)}</div>`).join('');
+            tempDiv.innerHTML = nextBatch.map((item, idx) => {
+                const author = (item.author || '').replace(/"/g, '&quot;');
+                const work = (item.work || '').replace(/"/g, '&quot;');
+                return `<div class="image-item" data-author="${author}" data-work="${work}">${createAestheticHTML(item, start + idx)}</div>`;
+            }).join('');
 
             const newElements = Array.from(tempDiv.children);
-            newElements.forEach(el => grid.appendChild(el));
+            
+            // 使用 requestAnimationFrame 优化性能
+            requestAnimationFrame(() => {
+                newElements.forEach(el => grid.appendChild(el));
 
-            if (msnry) {
-                msnry.appended(newElements);
-            }
+                // 事件委托已在初始化时设置，懒加载的元素自动支持点击筛选
 
-            if (window.aestheticViewer) {
-                window.aestheticViewer.update();
-            }
+                if (msnry) {
+                    msnry.appended(newElements);
+                    // 立即布局，确保内容在下方
+                    msnry.layout();
+                }
 
-            imagesLoaded(newElements).on('progress', function () {
-                if (msnry) msnry.layout();
+                // 确保滚动位置不变（新内容在下方，不会影响当前视图）
+                if (scrollContainer && currentScrollTop > 0) {
+                    scrollContainer.scrollTop = currentScrollTop;
+                }
+
+                // 更新 Viewer.js（延迟到下一帧）
+                requestAnimationFrame(() => {
+                    if (window.aestheticViewer) {
+                        window.aestheticViewer.update();
+                    }
+
+                    imagesLoaded(newElements).on('progress', function () {
+                        if (msnry) {
+                            requestAnimationFrame(() => {
+                                msnry.layout();
+                            });
+                        }
+                    });
+                });
+
+                aestheticRenderedCount += nextBatch.length;
             });
-
-            aestheticRenderedCount += nextBatch.length;
         }
 
         async function toggleMarkFor(filename) {
