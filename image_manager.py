@@ -613,30 +613,87 @@ def revert_organization(source_folder):
     return reverted_files
 
 def mark_image(filename, source_folder, mark=True):
-    """标记/取消标记图片"""
+    """标记/取消标记图片
+    
+    只标记指定文件及其同目录下的同名不同扩展名文件（如 JPG+RAW）
+    不会影响其他目录下的同名文件
+    
+    参数：
+    - filename: 可以是绝对路径或相对路径（相对于 source_folder）
+    - source_folder: 源文件夹路径
+    - mark: True 表示标记，False 表示取消标记
+    """
     app.logger.info(f"mark_image called: filename={filename}, folder={source_folder}, mark={mark}")
-    source = Path(source_folder)
+    source = Path(source_folder).resolve()
     marked_folder = source / CONFIG['marked_folder_name']
     marked_folder.mkdir(exist_ok=True)
     
-    # 找到所有同名文件（不同扩展名）
-    base_name = Path(filename).stem
-    # 尝试转义特殊字符，防止 glob 匹配错误
+    # 解析文件名，获取基础名和所在目录
+    file_path = Path(filename)
+    base_name = file_path.stem
+    
+    # 确定文件所在的目录
+    file_dir = None
+    actual_file_path = None
+    
+    # 情况1：filename 是完整的系统路径且文件存在
+    if file_path.is_absolute() and file_path.exists():
+        file_dir = file_path.parent
+        actual_file_path = file_path
+        app.logger.info(f"Using absolute path: {file_path}")
+    else:
+        # 情况2：filename 可能是前端传来的绝对路径（Windows）
+        # 需要规范化并检查
+        try:
+            normalized_path = Path(filename).resolve()
+            if normalized_path.exists():
+                file_dir = normalized_path.parent
+                actual_file_path = normalized_path
+                app.logger.info(f"Using resolved path: {normalized_path}")
+        except (ValueError, OSError):
+            pass
+        
+        if file_dir is None:
+            # 情况3：filename 是相对路径（如 author/work/photo.jpg）
+            # 直接基于 source_folder 构造完整路径
+            possible_path = source / file_path
+            if possible_path.exists():
+                file_dir = possible_path.parent
+                actual_file_path = possible_path
+                app.logger.info(f"Found relative path: {possible_path}")
+            else:
+                # 情况4：filename 可能只是文件名（后向兼容）
+                # 这种情况下应该只在 source_folder 的一级子目录中查找
+                escaped_filename = glob.escape(Path(filename).name)
+                for found_file in source.glob(f"*/{escaped_filename}"):
+                    if CONFIG['marked_folder_name'] not in found_file.parts and CONFIG['trash_folder_name'] not in found_file.parts:
+                        file_dir = found_file.parent
+                        actual_file_path = found_file
+                        app.logger.info(f"Found file in first-level dir: {found_file}")
+                        break
+                
+                # 如果还是找不到，默认使用 source_folder
+                if file_dir is None:
+                    file_dir = source
+                    app.logger.warning(f"File not found, using default directory: {source}")
+    
+    # 只在同一目录下查找同名不同扩展名的文件
     escaped_base_name = glob.escape(base_name)
     related_files = []
     
-    app.logger.info(f"Searching for files matching: {escaped_base_name}.* in {source}")
+    app.logger.info(f"Searching for files matching: {escaped_base_name}.* in {file_dir}")
     
-    # 在当前目录及子目录中查找
-    for file in source.rglob(f"{escaped_base_name}.*"):
-        # 排除 _marked_images 和 _trash 目录中的文件，防止重复处理
-        if CONFIG['marked_folder_name'] in file.parts or CONFIG['trash_folder_name'] in file.parts:
-            continue
+    # 只在文件所在目录中查找（不递归）
+    if file_dir.exists():
+        for file in file_dir.glob(f"{escaped_base_name}.*"):
+            # 排除 _marked_images 和 _trash 目录中的文件
+            if CONFIG['marked_folder_name'] in file.parts or CONFIG['trash_folder_name'] in file.parts:
+                continue
 
-        if file.suffix.lower() in CONFIG['image_extensions']:
-            related_files.append(file)
+            if file.suffix.lower() in CONFIG['image_extensions']:
+                related_files.append(file)
     
-    app.logger.info(f"Found {len(related_files)} related files: {[str(f) for f in related_files]}")
+    app.logger.info(f"Found {len(related_files)} related files in {file_dir}: {[str(f.name) for f in related_files]}")
     
     if mark:
         # 标记：复制到标记文件夹
@@ -645,12 +702,32 @@ def mark_image(filename, source_folder, mark=True):
                 ext_folder = marked_folder / file.suffix[1:].upper()
                 ext_folder.mkdir(exist_ok=True)
                 
-                target = ext_folder / file.name
+                # 生成新文件名：作品名_图片名.xxx
+                # 提取文件路径信息，判断是否在作者/作品目录结构下
+                try:
+                    rel_parts = file.relative_to(source).parts
+                except ValueError:
+                    rel_parts = ()
+                
+                # 根据路径层级生成前缀
+                if len(rel_parts) >= 3:
+                    # 格式：作者/作品名/图片名 -> 使用作品名作为前缀
+                    work_name = rel_parts[1]
+                    new_filename = f"{work_name}_{file.name}"
+                elif len(rel_parts) == 2:
+                    # 格式：文件夹/图片名 -> 使用文件夹名作为前缀
+                    folder_name = rel_parts[0]
+                    new_filename = f"{folder_name}_{file.name}"
+                else:
+                    # 其他情况：保持原文件名
+                    new_filename = file.name
+                
+                target = ext_folder / new_filename
                 if not target.exists():
                     shutil.copy2(str(file), str(target))
-                    app.logger.info(f"Copied {file} to {target}")
+                    app.logger.info(f"Copied {file.name} to marked folder as {new_filename}")
                 else:
-                    app.logger.info(f"Target {target} already exists, skipping copy.")
+                    app.logger.info(f"File {new_filename} already marked, skipping copy.")
             except Exception as e:
                 app.logger.error(f"Failed to copy {file}: {e}")
     else:
@@ -658,11 +735,27 @@ def mark_image(filename, source_folder, mark=True):
         for file in related_files:
             try:
                 ext_folder = marked_folder / file.suffix[1:].upper()
-                target = ext_folder / file.name
+                
+                # 生成标记文件夹中的文件名（与标记时的逻辑一致）
+                try:
+                    rel_parts = file.relative_to(source).parts
+                except ValueError:
+                    rel_parts = ()
+                
+                if len(rel_parts) >= 3:
+                    work_name = rel_parts[1]
+                    target_filename = f"{work_name}_{file.name}"
+                elif len(rel_parts) == 2:
+                    folder_name = rel_parts[0]
+                    target_filename = f"{folder_name}_{file.name}"
+                else:
+                    target_filename = file.name
+                
+                target = ext_folder / target_filename
                 
                 if target.exists():
                     target.unlink()
-                    app.logger.info(f"Removed {target}")
+                    app.logger.info(f"Removed {target_filename} from marked")
                 
                 # 如果文件夹为空，删除文件夹
                 if ext_folder.exists() and not any(ext_folder.iterdir()):
@@ -672,18 +765,61 @@ def mark_image(filename, source_folder, mark=True):
     
     return len(related_files)
 
+
 def delete_image(filename, source_folder, permanent=False):
-    """删除图片（移动到回收站）"""
-    source = Path(source_folder)
+    """删除图片（移动到回收站）
+    
+    参数：
+    - filename: 可以是绝对路径或相对路径（相对于 source_folder）
+    - source_folder: 源文件夹路径
+    - permanent: 是否永久删除（True）或移动到回收站（False）
+    """
+    source = Path(source_folder).resolve()
     trash_folder = source / CONFIG['trash_folder_name']
     
-    # 找到所有同名文件
-    base_name = Path(filename).stem
-    related_files = []
+    # 解析文件名，获取基础名和所在目录
+    file_path = Path(filename)
+    base_name = file_path.stem
     
-    for file in source.rglob(f"{base_name}.*"):
-        if file.suffix.lower() in CONFIG['image_extensions']:
-            related_files.append(file)
+    # 确定文件所在的目录（使用与 mark_image 相同的逻辑）
+    file_dir = None
+    
+    # 情况1：filename 是完整的系统路径且文件存在
+    if file_path.is_absolute() and file_path.exists():
+        file_dir = file_path.parent
+    else:
+        # 情况2：尝试规范化并检查
+        try:
+            normalized_path = Path(filename).resolve()
+            if normalized_path.exists():
+                file_dir = normalized_path.parent
+        except (ValueError, OSError):
+            pass
+        
+        if file_dir is None:
+            # 情况3：filename 是相对路径（如 author/work/photo.jpg）
+            possible_path = source / file_path
+            if possible_path.exists():
+                file_dir = possible_path.parent
+            else:
+                # 情况4：filename 可能只是文件名（后向兼容）
+                escaped_filename = glob.escape(Path(filename).name)
+                for found_file in source.glob(f"*/{escaped_filename}"):
+                    if CONFIG['trash_folder_name'] not in found_file.parts:
+                        file_dir = found_file.parent
+                        break
+                
+                # 如果还是找不到，默认使用 source_folder
+                if file_dir is None:
+                    file_dir = source
+    
+    # 只在同一目录下查找同名文件
+    related_files = []
+    if file_dir.exists():
+        escaped_base_name = glob.escape(base_name)
+        for file in file_dir.glob(f"{escaped_base_name}.*"):
+            if CONFIG['trash_folder_name'] not in file.parts and file.suffix.lower() in CONFIG['image_extensions']:
+                related_files.append(file)
     
     deleted_files = []
     
@@ -840,17 +976,41 @@ def manage_trash_size(trash_folder):
             file.unlink()
 
 def get_marked_images(source_folder):
-    """获取已标记的图片"""
-    source = Path(source_folder)
+    """获取已标记的图片（返回文件名及其完整相对路径信息）
+    
+    为了支持同名文件在不同目录的情况，需要记录原始文件的所在目录
+    """
+    source = Path(source_folder).resolve()
     marked_folder = source / CONFIG['marked_folder_name']
     marked_images = []
     
     if marked_folder.exists():
+        # 遍历标记文件夹中的所有文件
         for ext_folder in marked_folder.iterdir():
             if ext_folder.is_dir():
                 for file in ext_folder.iterdir():
                     if file.is_file():
-                        marked_images.append(file.name)
+                        filename = file.name
+                        
+                        # 反向查找：检查源目录中哪个目录包含这个文件
+                        # 从源目录递归查找同名文件，返回所有相对路径
+                        found_paths = []
+                        for found_file in source.rglob(filename):
+                            # 排除 marked_folder 和 trash_folder 中的文件
+                            if CONFIG['marked_folder_name'] not in found_file.parts and CONFIG['trash_folder_name'] not in found_file.parts:
+                                # 返回相对于 source_folder 的路径
+                                try:
+                                    rel_path = found_file.relative_to(source)
+                                    found_paths.append(str(rel_path).replace('\\', '/'))
+                                except ValueError:
+                                    pass
+                        
+                        # 将所有找到的路径添加到结果（如果没找到原始文件，至少保留文件名）
+                        if found_paths:
+                            marked_images.extend(found_paths)
+                        else:
+                            # 如果找不到原始文件，至少记录文件名以兼容旧数据
+                            marked_images.append(filename)
     
     return marked_images
 
